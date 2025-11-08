@@ -7,9 +7,13 @@ const { width } = Dimensions.get('window');
 const ToastNotification = ({ visible, message, type = 'success', onHide }) => {
   const translateY = useRef(new Animated.Value(-100)).current;
   const opacity = useRef(new Animated.Value(0)).current;
+  const progressWidth = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (visible) {
+      // Reset progress
+      progressWidth.setValue(0);
+
       // Slide down and fade in
       Animated.parallel([
         Animated.spring(translateY, {
@@ -24,6 +28,13 @@ const ToastNotification = ({ visible, message, type = 'success', onHide }) => {
           useNativeDriver: true,
         }),
       ]).start();
+
+      // Animate progress bar
+      Animated.timing(progressWidth, {
+        toValue: 1,
+        duration: 2500,
+        useNativeDriver: false,
+      }).start();
 
       // Auto hide after 2.5 seconds
       const timer = setTimeout(() => {
@@ -101,7 +112,7 @@ const ToastNotification = ({ visible, message, type = 'success', onHide }) => {
           style={[
             styles.progressFill,
             {
-              width: opacity.interpolate({
+              width: progressWidth.interpolate({
                 inputRange: [0, 1],
                 outputRange: ['0%', '100%'],
               }),
@@ -116,7 +127,7 @@ const ToastNotification = ({ visible, message, type = 'success', onHide }) => {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    top: 50,
+    top: 60,
     left: 16,
     right: 16,
     borderRadius: 12,

@@ -12,6 +12,7 @@ import FavoritesScreen from '../screens/FavoritesScreen';
 import CategoriesScreen from '../screens/CategoriesScreen';
 import CartScreen from '../screens/CartScreen';
 import AccountScreen from '../screens/AccountScreen';
+import AdminDashboard from '../screens/AdminDashboard';
 
 // Checkout Flow Screens
 import AddressSelectionScreen from '../screens/AddressSelectionScreen';
@@ -27,6 +28,7 @@ const Tab = createBottomTabNavigator();
 const HomeStack = createNativeStackNavigator();
 const CategoriesStack = createNativeStackNavigator();
 const CartStack = createNativeStackNavigator();
+const AdminStack = createNativeStackNavigator();
 
 // Home Stack Navigator
 const HomeStackNavigator = () => {
@@ -145,6 +147,19 @@ const CartStackNavigator = () => {
   );
 };
 
+// Admin Stack Navigator
+const AdminStackNavigator = () => {
+  return (
+    <AdminStack.Navigator
+      screenOptions={{
+        headerShown: false,
+      }}
+    >
+      <AdminStack.Screen name="AdminMain" component={AdminDashboard} />
+    </AdminStack.Navigator>
+  );
+};
+
 // Tab Navigator Component
 const TabNavigator = () => {
   const { getTotalItems } = useCart();
@@ -165,6 +180,8 @@ const TabNavigator = () => {
             iconName = 'shopping-cart';
           } else if (route.name === 'Account') {
             iconName = 'person';
+          } else if (route.name === 'Admin') {
+            iconName = 'admin-panel-settings';
           }
 
           return <Icon name={iconName} size={size} color={color} />;
@@ -248,6 +265,16 @@ const TabNavigator = () => {
         name="Account" 
         component={AccountScreen}
         options={{title: 'Account'}}
+      />
+      <Tab.Screen 
+        name="Admin" 
+        component={AdminStackNavigator}
+        options={{
+          title: 'Admin',
+          tabBarIcon: ({focused, color, size}) => (
+            <Icon name="admin-panel-settings" size={size} color={color} />
+          ),
+        }}
       />
     </Tab.Navigator>
   );

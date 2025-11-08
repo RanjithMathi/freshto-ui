@@ -79,7 +79,7 @@ export const OrderProvider = ({ children }) => {
   // Calculate order totals
   const calculateOrderTotal = (items, deliveryCharge = 0) => {
     const subtotal = items.reduce((sum, item) => {
-      const price = parseFloat(item.price.replace('₹', ''));
+      const price = item.price;
       return sum + price * item.quantity;
     }, 0);
 

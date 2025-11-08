@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,38 +6,69 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useAddress } from '../context/AddressContext';
 
-const AddressSelectionScreen = ({ navigation }) => {
+const AddressSelectionScreen = ({ navigation, route }) => {
+  const { customerId } = route.params || {};
   const {
     addresses,
-    selectedAddress,
-    selectAddress,
+    defaultAddress,
+    loading,
+    // customerId,
+    fetchAddresses,
+    setAsDefault,
     deleteAddress,
-    setDefaultAddress,
+    getAddressTypeDisplay,
+    getFullAddressString,
   } = useAddress();
 
-  const handleSelectAddress = (address) => {
-    selectAddress(address);
-  };
+  const [selectedAddressId, setSelectedAddressId] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const handleContinue = () => {
-    if (!selectedAddress) {
-      Alert.alert('No Address Selected', 'Please select a delivery address');
-      return;
+  useEffect(() => {
+    loadAddresses();
+  }, []);
+
+  useEffect(() => {
+    if (defaultAddress) {
+      setSelectedAddressId(defaultAddress.id);
     }
-    navigation.navigate('TimeSlotSelection');
+  }, [defaultAddress]);
+
+  const loadAddresses = async () => {
+    setRefreshing(true);
+    try {
+      await fetchAddresses(customerId);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to load addresses');
+    } finally {
+      setRefreshing(false);
+    }
   };
 
-  const handleAddNewAddress = () => {
-    navigation.navigate('AddEditAddress', { mode: 'add' });
+  const handleSelectAddress = (address) => {
+    setSelectedAddressId(address.id);
+  };
+
+  const handleSetAsDefault = async (addressId) => {
+    try {
+      await setAsDefault(addressId);
+      Alert.alert('Success', 'Default address updated');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to set default address');
+    }
   };
 
   const handleEditAddress = (address) => {
-    navigation.navigate('AddEditAddress', { mode: 'edit', address });
+    navigation.navigate('AddEditAddress', {
+      mode: 'edit',
+      address,
+      customerId,
+    });
   };
 
   const handleDeleteAddress = (addressId) => {
@@ -49,80 +80,140 @@ const AddressSelectionScreen = ({ navigation }) => {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => deleteAddress(addressId),
+          onPress: async () => {
+            try {
+              await deleteAddress(addressId);
+              Alert.alert('Success', 'Address deleted successfully');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete address');
+            }
+          },
         },
       ]
     );
   };
 
+  const handleContinue = () => {
+    console.log('addresses:', addresses);
+    console.log('customerId addressselection:', customerId);
+    const selected = addresses.find((addr) => addr.id === selectedAddressId);
+    if (!selected) {
+      Alert.alert('Error', 'Please select an address');
+      return;
+    }
+
+    if (selected) {
+      navigation.navigate('TimeSlotSelection', { address: selected, customerId: customerId });
+    }
+    // navigation.goBack();
+  };
+
+  const handleAddNewAddress = () => {
+    navigation.navigate('AddEditAddress', {
+      mode: 'add',
+      customerId,
+      isFirstTime: addresses.length === 0,
+    });
+  };
+
   const renderAddressCard = (address) => {
-    const isSelected = selectedAddress?.id === address.id;
+    const isSelected = selectedAddressId === address.id;
+    const isDefault = address.isDefault;
 
     return (
       <TouchableOpacity
         key={address.id}
-        style={[styles.addressCard, isSelected && styles.selectedCard]}
+        style={[styles.addressCard, isSelected && styles.addressCardSelected]}
         onPress={() => handleSelectAddress(address)}
         activeOpacity={0.7}
       >
+        {/* Selection Radio Button */}
         <View style={styles.cardHeader}>
           <View style={styles.radioContainer}>
-            <View style={[styles.radioOuter, isSelected && styles.radioOuterSelected]}>
-              {isSelected && <View style={styles.radioInner} />}
+            <View style={[styles.radio, isSelected && styles.radioSelected]}>
+              {isSelected && <View style={styles.radioDot} />}
             </View>
-            <View style={styles.addressTypeContainer}>
-              <Icon
-                name={address.type === 'Home' ? 'home' : address.type === 'Work' ? 'work' : 'location-on'}
-                size={18}
-                color="#0b8a0b"
-                style={styles.typeIcon}
-              />
-              <Text style={styles.addressType}>{address.type}</Text>
-              {address.isDefault && (
-                <View style={styles.defaultBadge}>
-                  <Text style={styles.defaultText}>Default</Text>
-                </View>
-              )}
+          </View>
+
+          {/* Address Type Badge */}
+          <View style={styles.typeBadge}>
+            <Text style={styles.typeBadgeText}>
+              {getAddressTypeDisplay(address.addressType)}
+            </Text>
+          </View>
+
+          {/* Default Badge */}
+          {isDefault && (
+            <View style={styles.defaultBadge}>
+              <Text style={styles.defaultBadgeText}>DEFAULT</Text>
             </View>
+          )}
+
+          {/* Action Buttons */}
+          <View style={styles.actionButtons}>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => handleEditAddress(address)}
+            >
+              <Icon name="edit" size={18} color="#0b8a0b" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => handleDeleteAddress(address.id)}
+            >
+              <Icon name="delete" size={18} color="#d32f2f" />
+            </TouchableOpacity>
           </View>
         </View>
 
-        <View style={styles.cardContent}>
-          <Text style={styles.nameText}>{address.name}</Text>
-          <Text style={styles.phoneText}>{address.phone}</Text>
-          <Text style={styles.addressText}>
-            {address.houseNo}, {address.area}
-          </Text>
-          {address.landmark && (
-            <Text style={styles.landmarkText}>Near {address.landmark}</Text>
+        {/* Address Details */}
+        <View style={styles.addressContent}>
+          <Text style={styles.addressText}>{address.addressLine1}</Text>
+          
+          {address.addressLine2 && (
+            <Text style={styles.addressText}>{address.addressLine2}</Text>
           )}
+          
+          {address.landmark && (
+            <Text style={styles.landmarkText}>Landmark: {address.landmark}</Text>
+          )}
+          
           <Text style={styles.addressText}>
-            {address.city}, {address.state} - {address.pincode}
+            {address.city}, {address.state} - {address.zipCode}
           </Text>
+
+          {address.contactPhone && (
+            <View style={styles.phoneContainer}>
+              <Icon name="phone" size={14} color="#666" />
+              <Text style={styles.phoneText}>{address.contactPhone}</Text>
+            </View>
+          )}
         </View>
 
-        <View style={styles.cardActions}>
+        {/* Set as Default Button */}
+        {!isDefault && isSelected && (
           <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => handleEditAddress(address)}
+            style={styles.setDefaultButton}
+            onPress={() => handleSetAsDefault(address.id)}
           >
-            <Icon name="edit" size={18} color="#0b8a0b" />
-            <Text style={styles.actionText}>Edit</Text>
+            <Text style={styles.setDefaultText}>Set as Default</Text>
           </TouchableOpacity>
-
-          <View style={styles.actionDivider} />
-
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => handleDeleteAddress(address.id)}
-          >
-            <Icon name="delete" size={18} color="#ff4444" />
-            <Text style={[styles.actionText, { color: '#ff4444' }]}>Delete</Text>
-          </TouchableOpacity>
-        </View>
+        )}
       </TouchableOpacity>
     );
   };
+
+  if (loading && !refreshing) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#0b8a0b" />
+          <Text style={styles.loadingText}>Loading addresses...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -132,29 +223,36 @@ const AddressSelectionScreen = ({ navigation }) => {
           <Icon name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Select Delivery Address</Text>
-        <View style={{ width: 40 }} />
+        <TouchableOpacity onPress={loadAddresses} style={styles.refreshButton}>
+          <Icon name="refresh" size={24} color="#333" />
+        </TouchableOpacity>
       </View>
 
-      {/* Address List */}
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        {/* Empty State */}
         {addresses.length === 0 ? (
-          <View style={styles.emptyContainer}>
+          <View style={styles.emptyState}>
             <Icon name="location-off" size={80} color="#ccc" />
-            <Text style={styles.emptyText}>No addresses saved</Text>
-            <Text style={styles.emptySubtext}>Add a new address to continue</Text>
+            <Text style={styles.emptyTitle}>No Addresses Found</Text>
+            <Text style={styles.emptyText}>
+              Add your delivery address to start ordering
+            </Text>
           </View>
         ) : (
-          addresses.map((address) => renderAddressCard(address))
+          <>
+            {/* Address List */}
+            {addresses.map((address) => renderAddressCard(address))}
+          </>
         )}
 
         {/* Add New Address Button */}
         <TouchableOpacity
-          style={styles.addButton}
+          style={styles.addNewButton}
           onPress={handleAddNewAddress}
           activeOpacity={0.7}
         >
-          <Icon name="add-circle" size={24} color="#0b8a0b" />
-          <Text style={styles.addButtonText}>Add New Address</Text>
+          <Icon name="add-circle-outline" size={24} color="#0b8a0b" />
+          <Text style={styles.addNewText}>Add New Address</Text>
         </TouchableOpacity>
       </ScrollView>
 
@@ -162,13 +260,11 @@ const AddressSelectionScreen = ({ navigation }) => {
       {addresses.length > 0 && (
         <View style={styles.footer}>
           <TouchableOpacity
-            style={[styles.continueButton, !selectedAddress && styles.continueButtonDisabled]}
+            style={styles.continueButton}
             onPress={handleContinue}
-            disabled={!selectedAddress}
             activeOpacity={0.8}
           >
-            <Text style={styles.continueButtonText}>Continue</Text>
-            <Icon name="arrow-forward" size={20} color="#fff" />
+            <Text style={styles.continueButtonText}>Continue with Selected Address</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -194,10 +290,25 @@ const styles = StyleSheet.create({
   backButton: {
     padding: 4,
   },
+  refreshButton: {
+    padding: 4,
+  },
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#333',
+    flex: 1,
+    textAlign: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#666',
   },
   scrollView: {
     flex: 1,
@@ -206,153 +317,145 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 100,
   },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginTop: 16,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 8,
+    textAlign: 'center',
+  },
   addressCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 16,
+    marginBottom: 12,
     borderWidth: 2,
     borderColor: '#e0e0e0',
   },
-  selectedCard: {
+  addressCardSelected: {
     borderColor: '#0b8a0b',
     backgroundColor: '#f0f9f0',
   },
   cardHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
   },
   radioContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
+    marginRight: 12,
   },
-  radioOuter: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+  radio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     borderWidth: 2,
     borderColor: '#ccc',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
   },
-  radioOuterSelected: {
+  radioSelected: {
     borderColor: '#0b8a0b',
   },
-  radioInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+  radioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: '#0b8a0b',
   },
-  addressTypeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
+  typeBadge: {
+    backgroundColor: '#e8f5e8',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginRight: 8,
   },
-  typeIcon: {
-    marginRight: 6,
-  },
-  addressType: {
-    fontSize: 16,
+  typeBadgeText: {
+    fontSize: 12,
+    color: '#0b8a0b',
     fontWeight: '600',
-    color: '#333',
   },
   defaultBadge: {
-    backgroundColor: '#0b8a0b',
+    backgroundColor: '#fef3e0',
     paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  defaultBadgeText: {
+    fontSize: 10,
+    color: '#f57c00',
+    fontWeight: '700',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    marginLeft: 'auto',
+  },
+  actionButton: {
+    padding: 6,
     marginLeft: 8,
   },
-  defaultText: {
-    fontSize: 10,
-    color: '#fff',
-    fontWeight: '600',
-  },
-  cardContent: {
-    marginBottom: 12,
-  },
-  nameText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
-  },
-  phoneText: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 8,
+  addressContent: {
+    paddingLeft: 32,
   },
   addressText: {
     fontSize: 14,
-    color: '#666',
+    color: '#333',
+    marginBottom: 4,
     lineHeight: 20,
   },
   landmarkText: {
     fontSize: 13,
-    color: '#888',
+    color: '#666',
     fontStyle: 'italic',
-    marginTop: 2,
+    marginBottom: 4,
   },
-  cardActions: {
-    flexDirection: 'row',
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-    paddingTop: 12,
-  },
-  actionButton: {
+  phoneContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
-    justifyContent: 'center',
+    marginTop: 8,
   },
-  actionDivider: {
-    width: 1,
-    backgroundColor: '#e0e0e0',
-    marginHorizontal: 12,
-  },
-  actionText: {
-    fontSize: 14,
-    color: '#0b8a0b',
-    fontWeight: '500',
+  phoneText: {
+    fontSize: 13,
+    color: '#666',
     marginLeft: 4,
   },
-  addButton: {
+  setDefaultButton: {
+    marginTop: 12,
+    marginLeft: 32,
+    alignSelf: 'flex-start',
+  },
+  setDefaultText: {
+    fontSize: 13,
+    color: '#0b8a0b',
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+  },
+  addNewButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 16,
     borderWidth: 2,
     borderColor: '#0b8a0b',
     borderStyle: 'dashed',
+    padding: 20,
+    marginTop: 8,
   },
-  addButtonText: {
+  addNewText: {
     fontSize: 16,
     fontWeight: '600',
     color: '#0b8a0b',
     marginLeft: 8,
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#666',
-    marginTop: 16,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#999',
-    marginTop: 8,
   },
   footer: {
     position: 'absolute',
@@ -367,20 +470,14 @@ const styles = StyleSheet.create({
   },
   continueButton: {
     backgroundColor: '#0b8a0b',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
     borderRadius: 8,
-  },
-  continueButtonDisabled: {
-    backgroundColor: '#ccc',
+    paddingVertical: 16,
+    alignItems: 'center',
   },
   continueButtonText: {
     fontSize: 16,
     fontWeight: '600',
     color: '#fff',
-    marginRight: 8,
   },
 });
 

@@ -59,17 +59,27 @@ export const CartProvider = ({ children }) => {
   // Clear entire cart
   const clearCart = () => {
     setCartItems([]);
+    showToast('Cart cleared', 'info');
   };
 
-  // Get total number of items in cart
+  // Get total number of unique items (products) in cart
   const getTotalItems = () => {
+    return cartItems.length;
+  };
+
+  // Get total quantity of all items in cart
+  const getTotalQuantity = () => {
     return cartItems.reduce((total, item) => total + item.quantity, 0);
   };
 
   // Get total price of all items
   const getTotalPrice = () => {
     return cartItems.reduce((total, item) => {
-      const price = parseFloat(item.price.replace('₹', ''));
+      // Handle both string prices with ₹ symbol and numeric prices
+      const price = typeof item.price === 'string' 
+        ? item.price 
+        : item.price;
+      
       return total + (price * item.quantity);
     }, 0);
   };

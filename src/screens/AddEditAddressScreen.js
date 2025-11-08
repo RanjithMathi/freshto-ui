@@ -7,31 +7,45 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useAddress } from '../context/AddressContext';
+import axios from 'axios';
+
+const API_BASE_URL = 'http://192.168.0.127:8080/api'; // Update with your API URL
 
 const AddEditAddressScreen = ({ navigation, route }) => {
-  const { mode = 'add', address } = route.params || {};
-  const { addAddress, updateAddress } = useAddress();
+  const { mode = 'add', address, isFirstTime = false, customerId } = route.params || {};
+  const { refreshAddresses } = useAddress();
 
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    name: '',
-    phone: '',
-    houseNo: '',
-    area: '',
+    addressLine1: '',
+    addressLine2: '',
     landmark: '',
     city: '',
     state: '',
-    pincode: '',
-    type: 'Home',
+    zipCode: '',
+    contactPhone: '',
+    addressType: 'HOME',
     isDefault: false,
   });
 
   useEffect(() => {
     if (mode === 'edit' && address) {
-      setFormData(address);
+      setFormData({
+        addressLine1: address.addressLine1 || '',
+        addressLine2: address.addressLine2 || '',
+        landmark: address.landmark || '',
+        city: address.city || '',
+        state: address.state || '',
+        zipCode: address.zipCode || '',
+        contactPhone: address.contactPhone || '',
+        addressType: address.addressType || 'HOME',
+        isDefault: address.isDefault || false,
+      });
     }
   }, [mode, address]);
 
@@ -40,22 +54,10 @@ const AddEditAddressScreen = ({ navigation, route }) => {
   };
 
   const validateForm = () => {
-    const { name, phone, houseNo, area, city, state, pincode } = formData;
+    const { addressLine1, city, state, zipCode } = formData;
 
-    if (!name.trim()) {
-      Alert.alert('Error', 'Please enter your name');
-      return false;
-    }
-    if (!phone.trim() || phone.length < 10) {
-      Alert.alert('Error', 'Please enter a valid phone number');
-      return false;
-    }
-    if (!houseNo.trim()) {
-      Alert.alert('Error', 'Please enter house/flat number');
-      return false;
-    }
-    if (!area.trim()) {
-      Alert.alert('Error', 'Please enter area/street');
+    if (!addressLine1.trim()) {
+      Alert.alert('Error', 'Please enter address line 1 (House/Flat number & Street)');
       return false;
     }
     if (!city.trim()) {
@@ -66,34 +68,86 @@ const AddEditAddressScreen = ({ navigation, route }) => {
       Alert.alert('Error', 'Please enter state');
       return false;
     }
-    if (!pincode.trim() || pincode.length !== 6) {
+    if (!zipCode.trim() || zipCode.length !== 6) {
       Alert.alert('Error', 'Please enter a valid 6-digit PIN code');
+      return false;
+    }
+    
+    // Validate contact phone if provided
+    if (formData.contactPhone && !/^[6-9]\d{9}$/.test(formData.contactPhone)) {
+      Alert.alert('Error', 'Please enter a valid 10-digit Indian phone number');
       return false;
     }
 
     return true;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validateForm()) return;
 
-    if (mode === 'add') {
-      addAddress(formData);
-      Alert.alert('Success', 'Address added successfully');
-    } else {
-      updateAddress(address.id, formData);
-      Alert.alert('Success', 'Address updated successfully');
-    }
+    setLoading(true);
+    console.log("mode:",mode);
+    
+console.log("`${API_BASE_URL}/addresses/customer/${customerId}:",API_BASE_URL+'/addresses/customer/'+customerId);
 
-    navigation.goBack();
+    try {
+      if (mode === 'add') {
+        // POST /api/addresses/customer/{customerId}
+        await axios.post(`${API_BASE_URL}/addresses/customer/${customerId}`, formData);
+        Alert.alert('Success', 'Address added successfully');
+      } else {
+        // PUT /api/addresses/{id}
+        await axios.put(`${API_BASE_URL}/addresses/${address.id}`, formData);
+        Alert.alert('Success', 'Address updated successfully');
+      }
+
+      // Refresh addresses in context
+      if (refreshAddresses) {
+        await refreshAddresses(customerId);
+      }
+
+      // For first-time users, navigate to AddressSelection instead of going back
+      if (isFirstTime) {
+        navigation.replace('AddressSelection');
+      } else {
+        navigation.goBack();
+      }
+    } catch (error) {
+      console.error('Error saving address:', error);
+      Alert.alert(
+        'Error',
+        error.response?.data?.message || 'Failed to save address. Please try again.'
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const renderAddressTypeButton = (type, icon) => {
-    const isSelected = formData.type === type;
+  const handleCancel = () => {
+    if (isFirstTime) {
+      Alert.alert(
+        'Address Required',
+        'You need to add a delivery address to continue with checkout. Are you sure you want to cancel?',
+        [
+          { text: 'Continue Adding', style: 'cancel' },
+          {
+            text: 'Cancel Checkout',
+            style: 'destructive',
+            onPress: () => navigation.navigate('CartMain'),
+          },
+        ]
+      );
+    } else {
+      navigation.goBack();
+    }
+  };
+
+  const renderAddressTypeButton = (type, icon, displayName) => {
+    const isSelected = formData.addressType === type;
     return (
       <TouchableOpacity
         style={[styles.typeButton, isSelected && styles.typeButtonSelected]}
-        onPress={() => handleInputChange('type', type)}
+        onPress={() => handleInputChange('addressType', type)}
         activeOpacity={0.7}
       >
         <Icon
@@ -102,7 +156,7 @@ const AddEditAddressScreen = ({ navigation, route }) => {
           color={isSelected ? '#fff' : '#0b8a0b'}
         />
         <Text style={[styles.typeButtonText, isSelected && styles.typeButtonTextSelected]}>
-          {type}
+          {displayName}
         </Text>
       </TouchableOpacity>
     );
@@ -112,7 +166,7 @@ const AddEditAddressScreen = ({ navigation, route }) => {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <TouchableOpacity onPress={handleCancel} style={styles.backButton}>
           <Icon name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
@@ -121,34 +175,17 @@ const AddEditAddressScreen = ({ navigation, route }) => {
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        {/* Contact Information */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Contact Information</Text>
-
-          <View style={styles.inputContainer}>
-            <Icon name="person" size={20} color="#666" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Full Name *"
-              value={formData.name}
-              onChangeText={(value) => handleInputChange('name', value)}
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Icon name="phone" size={20} color="#666" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Phone Number *"
-              value={formData.phone}
-              onChangeText={(value) => handleInputChange('phone', value)}
-              keyboardType="phone-pad"
-              maxLength={15}
-            />
-          </View>
+      {/* First Time User Banner */}
+      {isFirstTime && (
+        <View style={styles.firstTimeBanner}>
+          <Icon name="info" size={20} color="#0b8a0b" />
+          <Text style={styles.firstTimeText}>
+            Please add your delivery address to continue
+          </Text>
         </View>
+      )}
 
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Address Details */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Address Details</Text>
@@ -157,9 +194,10 @@ const AddEditAddressScreen = ({ navigation, route }) => {
             <Icon name="home" size={20} color="#666" style={styles.inputIcon} />
             <TextInput
               style={styles.input}
-              placeholder="House/Flat Number *"
-              value={formData.houseNo}
-              onChangeText={(value) => handleInputChange('houseNo', value)}
+              placeholder="House/Flat No. & Street *"
+              value={formData.addressLine1}
+              onChangeText={(value) => handleInputChange('addressLine1', value)}
+              multiline
             />
           </View>
 
@@ -167,9 +205,10 @@ const AddEditAddressScreen = ({ navigation, route }) => {
             <Icon name="location-on" size={20} color="#666" style={styles.inputIcon} />
             <TextInput
               style={styles.input}
-              placeholder="Area/Street *"
-              value={formData.area}
-              onChangeText={(value) => handleInputChange('area', value)}
+              placeholder="Area/Locality (Optional)"
+              value={formData.addressLine2}
+              onChangeText={(value) => handleInputChange('addressLine2', value)}
+              multiline
             />
           </View>
 
@@ -210,21 +249,41 @@ const AddEditAddressScreen = ({ navigation, route }) => {
             <TextInput
               style={styles.input}
               placeholder="PIN Code *"
-              value={formData.pincode}
-              onChangeText={(value) => handleInputChange('pincode', value)}
+              value={formData.zipCode}
+              onChangeText={(value) => handleInputChange('zipCode', value)}
               keyboardType="number-pad"
               maxLength={6}
             />
           </View>
         </View>
 
+        {/* Contact Information */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Contact Information (Optional)</Text>
+
+          <View style={styles.inputContainer}>
+            <Icon name="phone" size={20} color="#666" style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Alternate Phone Number"
+              value={formData.contactPhone}
+              onChangeText={(value) => handleInputChange('contactPhone', value)}
+              keyboardType="phone-pad"
+              maxLength={10}
+            />
+          </View>
+          <Text style={styles.helperText}>
+            Use if different from your registered number
+          </Text>
+        </View>
+
         {/* Address Type */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Address Type</Text>
           <View style={styles.typeContainer}>
-            {renderAddressTypeButton('Home', 'home')}
-            {renderAddressTypeButton('Work', 'work')}
-            {renderAddressTypeButton('Other', 'location-on')}
+            {renderAddressTypeButton('HOME', 'home', 'Home')}
+            {renderAddressTypeButton('WORK', 'work', 'Work')}
+            {renderAddressTypeButton('OTHER', 'location-on', 'Other')}
           </View>
         </View>
 
@@ -237,7 +296,12 @@ const AddEditAddressScreen = ({ navigation, route }) => {
           <View style={[styles.checkbox, formData.isDefault && styles.checkboxChecked]}>
             {formData.isDefault && <Icon name="check" size={16} color="#fff" />}
           </View>
-          <Text style={styles.checkboxLabel}>Save as default address</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.checkboxLabel}>Set as default address</Text>
+            <Text style={styles.checkboxHelper}>
+              This address will be selected automatically for orders
+            </Text>
+          </View>
         </TouchableOpacity>
       </ScrollView>
 
@@ -245,20 +309,26 @@ const AddEditAddressScreen = ({ navigation, route }) => {
       <View style={styles.footer}>
         <TouchableOpacity
           style={styles.cancelButton}
-          onPress={() => navigation.goBack()}
+          onPress={handleCancel}
           activeOpacity={0.7}
+          disabled={loading}
         >
           <Text style={styles.cancelButtonText}>Cancel</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.saveButton}
+          style={[styles.saveButton, loading && styles.saveButtonDisabled]}
           onPress={handleSave}
           activeOpacity={0.8}
+          disabled={loading}
         >
-          <Text style={styles.saveButtonText}>
-            {mode === 'add' ? 'Add Address' : 'Update Address'}
-          </Text>
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.saveButtonText}>
+              {mode === 'add' ? 'Add Address' : 'Update Address'}
+            </Text>
+          )}
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -287,6 +357,22 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#333',
+  },
+  firstTimeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e8f5e8',
+    padding: 12,
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderRadius: 8,
+  },
+  firstTimeText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#0b8a0b',
+    fontWeight: '500',
+    marginLeft: 8,
   },
   scrollView: {
     flex: 1,
@@ -322,6 +408,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 14,
     color: '#333',
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: -8,
+    marginLeft: 4,
+    marginBottom: 4,
   },
   row: {
     flexDirection: 'row',
@@ -378,6 +471,12 @@ const styles = StyleSheet.create({
   checkboxLabel: {
     fontSize: 14,
     color: '#333',
+    fontWeight: '500',
+  },
+  checkboxHelper: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
   },
   footer: {
     position: 'absolute',
@@ -413,6 +512,9 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
     marginLeft: 8,
+  },
+  saveButtonDisabled: {
+    opacity: 0.6,
   },
   saveButtonText: {
     fontSize: 16,

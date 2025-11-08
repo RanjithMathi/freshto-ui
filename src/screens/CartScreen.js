@@ -1,4 +1,5 @@
-import React from 'react';
+// src/screens/CartScreen.js
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,13 +8,34 @@ import {
   Image,
   TouchableOpacity,
   Alert,
+  Modal,
+  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
+import { useAddress } from '../context/AddressContext';
+import authService from '../services/authService';
 
 const CartScreen = ({ navigation }) => {
   const { cartItems, updateQuantity, removeFromCart, getTotalPrice, getTotalItems } = useCart();
+  const { isLoggedIn, login, user } = useAuth();
+  const { addresses, fetchAddresses, setCustomerIdManually } = useAddress();
+  
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [otp, setOtp] = useState('');
+  const [showOtpInput, setShowOtpInput] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  // Log user and addresses when they change
+  useEffect(() => {
+    console.log('🛒 CartScreen - Current user:', user);
+    console.log('🛒 CartScreen - Is logged in:', isLoggedIn);
+    console.log('🛒 CartScreen - Addresses:', addresses);
+  }, [user, isLoggedIn, addresses]);
 
   const handleQuantityChange = (itemId, change) => {
     const item = cartItems.find((i) => i.id === itemId);
@@ -38,7 +60,170 @@ const CartScreen = ({ navigation }) => {
       Alert.alert('Empty Cart', 'Please add items to your cart before checkout');
       return;
     }
-    navigation.navigate('AddressSelection');
+
+    console.log('🛒 Proceeding to checkout...');
+    console.log('🛒 Is logged in:', isLoggedIn);
+
+    // Check if user is logged in
+    if (!isLoggedIn) {
+      console.log('🔐 User not logged in - showing auth modal');
+      setShowAuthModal(true);
+    } else {
+      console.log('✅ User is logged in - checking addresses');
+      // User is logged in, check if they have addresses
+      checkAndNavigate();
+    }
+  };
+
+  const checkAndNavigate = () => {
+    console.log('🗺️ Checking addresses for navigation');
+    console.log('📍 Current addresses count:', addresses.length);
+    console.log('👤 Current user ID:', user);
+    
+    // Check if user has any addresses
+    if (!addresses || addresses.length === 0) {
+      console.log('➕ No addresses found - navigating to add address');
+      // No addresses - navigate to add address screen
+      navigation.navigate('AddEditAddress', { 
+        mode: 'add',
+        isFirstTime: true,
+        customerId: user?.userId, // Pass customer ID explicitly
+      });
+    } else {
+      console.log('📋 Addresses found - navigating to address selection');
+      // Has addresses - navigate to address selection
+      navigation.navigate('AddressSelection',  { customerId: user.userId } );
+    }
+  };
+
+  const handleSendOTP = async () => {
+    // Validate phone number
+    if (!phoneNumber || phoneNumber.length !== 10) {
+      Alert.alert('Invalid Phone', 'Please enter a valid 10-digit phone number');
+      return;
+    }
+
+    console.log('📤 Sending OTP to:', phoneNumber);
+    setLoading(true);
+    
+    try {
+      const response = await authService.sendOtp(phoneNumber);
+      console.log('📨 Send OTP response:', response);
+      
+      if (response.success) {
+        setShowOtpInput(true);
+        Alert.alert('OTP Sent', `Verification code sent to ${phoneNumber}`);
+      } else {
+        Alert.alert('Error', response.message || 'Failed to send OTP');
+      }
+    } catch (error) {
+      console.error('❌ Send OTP error:', error);
+      Alert.alert('Error', 'Failed to send OTP. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOTP = async () => {
+    // Validate OTP
+    if (!otp || otp.length !== 6) {
+      Alert.alert('Invalid OTP', 'Please enter a valid 6-digit OTP');
+      return;
+    }
+
+    console.log('🔐 Verifying OTP...');
+    setLoading(true);
+    
+    try {
+      const response = await authService.verifyOtp(phoneNumber, otp);
+      console.log('✅ Verify OTP response:', response);
+
+      if (response.success) {
+        console.log('✅ OTP Verified successfully');
+        console.log('👤 User data:', response.user);
+        console.log('🏠 Has addresses:', response.hasAddresses);
+        
+        // ✅ CRITICAL: Login with proper data structure
+        const loginResult = await login({ 
+          phone: phoneNumber,
+          userData: response.user, // Backend UserDto
+          token: response.token || '',
+          hasAddresses: response.hasAddresses || false,
+        });
+        
+        console.log('🔐 Login result:', loginResult);
+        
+        if (loginResult.success) {
+          // ✅ CRITICAL: Update AddressContext with customer ID
+          const customerId = response.user.id;
+          console.log('📍 Setting customer ID in AddressContext:', customerId);
+          await setCustomerIdManually(customerId);
+          
+          // Close the auth modal
+          setShowAuthModal(false);
+          setPhoneNumber('');
+          setOtp('');
+          setShowOtpInput(false);
+          
+          Alert.alert('Success', 'Login successful!');
+          
+          // Wait a bit for state to update
+          setTimeout(() => {
+            console.log('🚀 Navigating based on address status...');
+            console.log('🏠 Has addresses from backend:', response.hasAddresses);
+            
+            if (!response.hasAddresses) {
+              console.log('➕ No addresses - navigating to add address');
+              // First time user or no addresses - go directly to add address screen
+              navigation.navigate('AddEditAddress', { 
+                mode: 'add',
+                isFirstTime: true,
+                customerId: customerId,
+              });
+            } else {
+              console.log('📋 Has addresses - navigating to address selection');
+              // Existing user with addresses - show address selection
+              navigation.navigate('AddressSelection');
+            }
+          }, 500);
+        } else {
+          Alert.alert('Error', 'Login failed. Please try again.');
+        }
+      } else {
+        Alert.alert('Invalid OTP', response.message || 'Please enter the correct OTP');
+      }
+    } catch (error) {
+      console.error('❌ Error verifying OTP:', error);
+      Alert.alert('Error', 'Failed to verify OTP. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendOTP = async () => {
+    console.log('🔄 Resending OTP...');
+    setLoading(true);
+    
+    try {
+      const response = await authService.sendOtp(phoneNumber);
+      if (response.success) {
+        Alert.alert('OTP Resent', 'A new verification code has been sent');
+      } else {
+        Alert.alert('Error', response.message || 'Failed to resend OTP');
+      }
+    } catch (error) {
+      console.error('❌ Resend OTP error:', error);
+      Alert.alert('Error', 'Failed to resend OTP. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCloseAuthModal = () => {
+    setShowAuthModal(false);
+    setPhoneNumber('');
+    setOtp('');
+    setShowOtpInput(false);
   };
 
   const renderCartItem = ({ item }) => (
@@ -175,10 +360,106 @@ const CartScreen = ({ navigation }) => {
           </View>
         </>
       )}
+
+      {/* Authentication Modal */}
+      <Modal
+        visible={showAuthModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={handleCloseAuthModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={handleCloseAuthModal}
+            >
+              <Icon name="close" size={24} color="#333" />
+            </TouchableOpacity>
+
+            <Icon name="lock" size={60} color="#0b8a0b" />
+            <Text style={styles.modalTitle}>
+              {showOtpInput ? 'Verify OTP' : 'Login to Continue'}
+            </Text>
+            <Text style={styles.modalSubtitle}>
+              {showOtpInput
+                ? `Enter the 6-digit code sent to ${phoneNumber}`
+                : 'Please enter your phone number to proceed with checkout'}
+            </Text>
+
+            {!showOtpInput ? (
+              <>
+                <View style={styles.inputContainer}>
+                  <Icon name="phone" size={20} color="#666" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter phone number"
+                    keyboardType="phone-pad"
+                    maxLength={10}
+                    value={phoneNumber}
+                    onChangeText={setPhoneNumber}
+                    editable={!loading}
+                  />
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.authButton, loading && styles.authButtonDisabled]}
+                  onPress={handleSendOTP}
+                  disabled={loading}
+                  activeOpacity={0.8}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.authButtonText}>Send OTP</Text>
+                  )}
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <View style={styles.inputContainer}>
+                  <Icon name="lock" size={20} color="#666" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter 6-digit OTP"
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    value={otp}
+                    onChangeText={setOtp}
+                    editable={!loading}
+                  />
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.authButton, loading && styles.authButtonDisabled]}
+                  onPress={handleVerifyOTP}
+                  disabled={loading}
+                  activeOpacity={0.8}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.authButtonText}>Verify & Continue</Text>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.resendButton}
+                  onPress={handleResendOTP}
+                  disabled={loading}
+                >
+                  <Text style={styles.resendText}>Didn't receive code? Resend</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
 
+// Styles remain the same as your original
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -378,6 +659,86 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
     marginRight: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+    minHeight: 400,
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    padding: 8,
+    zIndex: 1,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#333',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 32,
+    paddingHorizontal: 20,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    marginBottom: 20,
+    backgroundColor: '#f9f9f9',
+  },
+  inputIcon: {
+    marginRight: 12,
+  },
+  input: {
+    flex: 1,
+    height: 50,
+    fontSize: 16,
+    color: '#333',
+  },
+  authButton: {
+    width: '100%',
+    backgroundColor: '#0b8a0b',
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 50,
+  },
+  authButtonDisabled: {
+    opacity: 0.6,
+  },
+  authButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  resendButton: {
+    marginTop: 20,
+    padding: 8,
+  },
+  resendText: {
+    fontSize: 14,
+    color: '#0b8a0b',
+    fontWeight: '600',
   },
 });
 

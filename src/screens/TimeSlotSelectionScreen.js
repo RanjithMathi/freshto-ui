@@ -11,7 +11,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useOrder } from '../context/OrderContext';
 
-const TimeSlotSelectionScreen = ({ navigation }) => {
+const TimeSlotSelectionScreen = ({ navigation, route }) => {
+   const { address,customerId } = route.params || {};
   const { selectDeliverySlot } = useOrder();
   
   const [selectedDate, setSelectedDate] = useState('today');
@@ -51,7 +52,9 @@ const TimeSlotSelectionScreen = ({ navigation }) => {
     };
 
     selectDeliverySlot(deliverySlot);
-    navigation.navigate('OrderSummary');
+    console.log("address route",address);
+    console.log("time slot screen:",customerId);
+    navigation.navigate('OrderSummary', { address: address ,customerId: customerId });
   };
 
   const renderDateButton = (dateType, label) => {

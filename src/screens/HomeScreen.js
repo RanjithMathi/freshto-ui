@@ -10,57 +10,106 @@ import {
   TextInput,
   StatusBar,
   TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import CircleMenu from '../components/CircleMenu';
 import ProductCard from '../components/ProductCard';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import productService from '../services/productService';
 
-// Local images
+// Local images for fallback
 import product1 from '../assets/images/careo-5.jpg';
 import product2 from '../assets/images/careo-3.jpg';
 import product3 from '../assets/images/careo-1.jpg';
 
-const products = [
-  { id: '1', title: 'Fresh Chicken Breast- 500g', price: '₹199', image: product1 },
-  { id: '2', title: 'Tender Chicken Legs- 1kg', price: '₹249', image: product2 },
-  { id: '3', title: 'Chicken Wings-500g', price: '₹179', image: product3 },
-];
-
-// Create larger product array with duplicates for section pages
-const createLargerProductArray = () => {
-  const largerArray = [];
-  for (let i = 0; i < 4; i++) {
-    products.forEach((product, index) => {
-      largerArray.push({
-        ...product,
-        id: `${product.id}-${i}-${index}`,
-      });
-    });
-  }
-  return largerArray;
-};
-
-const bannerImages = [
-  require('../assets/images/careo-1.jpg'),
-  require('../assets/images/careo-5.jpg'),
-  require('../assets/images/careo-3.jpg'),
+// Banner images with their associated categories
+const bannerData = [
+  { 
+    id: '1',
+    image: require('../assets/images/careo-11.jpg'),
+    category: 'Chicken'
+  },
+  { 
+    id: '2',
+    image: require('../assets/images/careo-22.jpg'),
+    category: 'Country Chicken'
+  },
+  { 
+    id: '3',
+    image: require('../assets/images/careo-33.jpg'),
+    category: 'Egg'
+  },
 ];
 
 const { width } = Dimensions.get('window');
 
 const HEADER_TOP_HEIGHT = 60;
 const SEARCH_BAR_HEIGHT = 50;
+const API_BASE_URL = 'http://192.168.0.127:8080';
 
 const HomeScreen = ({ navigation }) => {
   const flatListRef = useRef(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [searchText, setSearchText] = useState('');
   const scrollY = useRef(new Animated.Value(0)).current;
+  
+  // Sale products state
+  const [flashSale, setFlashSale] = useState([]);
+  const [diwaliSale, setDiwaliSale] = useState([]);
+  const [festivalSale, setFestivalSale] = useState([]);
+  const [loading, setLoading] = useState(false);
 
+  // Load sale products from API
+  useEffect(() => {
+    fetchSaleProducts();
+  }, []);
+
+  const fetchSaleProducts = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch Flash Sale products
+      const flashResponse = await fetch(`${API_BASE_URL}/api/products/sale/FLASH_SALE`);
+      const flashData = await flashResponse.json();
+      setFlashSale(formatProducts(flashData));
+
+      // Fetch Diwali Sale products
+      const diwaliResponse = await fetch(`${API_BASE_URL}/api/products/sale/DIWALI_SALE`);
+      const diwaliData = await diwaliResponse.json();
+      setDiwaliSale(formatProducts(diwaliData));
+
+      // Fetch Festival Sale products
+      const festivalResponse = await fetch(`${API_BASE_URL}/api/products/sale/FESTIVAL_SALE`);
+      const festivalData = await festivalResponse.json();
+      setFestivalSale(formatProducts(festivalData));
+      
+    } catch (error) {
+      console.error('Error fetching sale products:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Format products from API response
+  const formatProducts = (products) => {
+    return products.map((product) => ({
+      id: product.id?.toString(),
+      title: product.name,
+      price: `₹${product.price}`,
+      originalPrice: product.originalPrice ? `₹${product.originalPrice}` : null,
+      discount: product.discountPercentage ? `${product.discountPercentage}% OFF` : null,
+      image: product.imagePath 
+        ? { uri: `${API_BASE_URL}/api/products/images/${product.imagePath}` }
+        : product1, // fallback image
+      product: product, // Keep original product data
+    }));
+  };
+
+  // Banner auto-scroll
   useEffect(() => {
     const interval = setInterval(() => {
-      const nextIndex = (currentIndex + 1) % bannerImages.length;
+      const nextIndex = (currentIndex + 1) % bannerData.length;
       flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
       setCurrentIndex(nextIndex);
     }, 3000);
@@ -73,17 +122,23 @@ const HomeScreen = ({ navigation }) => {
     setCurrentIndex(index);
   };
 
-  const handleViewAll = (sectionName) => {
+  const handleViewAll = (sectionName, products) => {
     navigation.navigate('SectionProducts', {
       sectionName,
-      products: createLargerProductArray(),
+      products: products,
     });
   };
 
   const handleCategoryPress = (categoryName) => {
-    // Navigate to CategoryProducts screen with selected category
     navigation.navigate('CategoryProducts', {
       category: categoryName,
+    });
+  };
+
+  // Handle banner click to navigate to category
+  const handleBannerPress = (category) => {
+    navigation.navigate('CategoryProducts', {
+      category: category,
     });
   };
 
@@ -105,6 +160,37 @@ const HomeScreen = ({ navigation }) => {
     outputRange: [HEADER_TOP_HEIGHT, 0],
     extrapolate: 'clamp',
   });
+
+  // Get section data based on section name
+  const getSectionData = (sectionName) => {
+    switch (sectionName) {
+      case 'Flash Sale':
+        return flashSale;
+      case 'Diwali Sale':
+        return diwaliSale;
+      case 'Festival Sale':
+        return festivalSale;
+      default:
+        return [];
+    }
+  };
+
+  // Define sections with their data
+  const sections = [
+    { name: 'Flash Sale', icon: '⚡', data: flashSale },
+    { name: 'Festival Sale', icon: '🎉', data: festivalSale },
+    { name: 'Diwali Sale', icon: '🪔', data: diwaliSale },
+  ];
+
+  // Render banner item with TouchableOpacity
+  const renderBannerItem = ({ item }) => (
+    <TouchableOpacity 
+      activeOpacity={0.9}
+      onPress={() => handleBannerPress(item.category)}
+    >
+      <Image source={item.image} style={styles.bannerImage} resizeMode="cover" />
+    </TouchableOpacity>
+  );
 
   return (
     <View style={styles.container}>
@@ -170,14 +256,12 @@ const HomeScreen = ({ navigation }) => {
           { useNativeDriver: true }
         )}
       >
-        {/* Carousel */}
+        {/* Carousel - Clickable without indicators */}
         <FlatList
           ref={flatListRef}
-          data={bannerImages}
-          keyExtractor={(_, index) => index.toString()}
-          renderItem={({ item }) => (
-            <Image source={item} style={styles.bannerImage} resizeMode="cover" />
-          )}
+          data={bannerData}
+          keyExtractor={(item) => item.id}
+          renderItem={renderBannerItem}
           horizontal
           showsHorizontalScrollIndicator={false}
           onScroll={handleScroll}
@@ -192,53 +276,86 @@ const HomeScreen = ({ navigation }) => {
         {/* Circle Menu */}
         <View style={styles.menuRow}>
           <CircleMenu 
-            title="Chicken" 
+            title="Chicken (கோழி)" 
             iconUri={require('../assets/categories/chicken.jpg')}
             onPress={() => handleCategoryPress('Chicken')}
           />
           <CircleMenu 
-            title="Tender Cut" 
-            iconUri={require('../assets/categories/readytocook.jpg')}
-            onPress={() => handleCategoryPress('Ready to Cook')}
-          />
+            title="Country Chicken (நாட்டுக்கோழி)"
+            iconUri={require('../assets/images/nattukozhi.jpg')}
+            onPress={() => handleCategoryPress('Country Chicken')}
+          /> 
           <CircleMenu 
-            title="Egg" 
+            title="Egg (முட்டை)" 
             iconUri={require('../assets/categories/eggs.jpg')}
-            onPress={() => handleCategoryPress('Eggs')}
+            onPress={() => handleCategoryPress('Egg')}
           />
         </View>
 
-        {/* Product Sections */}
-        {['Flash Sale', 'Festival Sale', 'Diwali Sale'].map((section) => (
-          <View key={section} style={styles.productSection}>
-            {/* Section header with title + View All */}
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>{section}</Text>
-
-              <TouchableOpacity
-                style={styles.viewAllButton}
-                onPress={() => handleViewAll(section)}
-              >
-                <Text style={styles.viewAllText}>View All</Text>
-                <Icon name="arrow-forward" size={16} color="#dd7805" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Product grid */}
-            <View style={styles.productGrid}>
-              {products.map((product) => (
-                <ProductCard
-                  key={`${section}-${product.id}`}
-                  image={product.image}
-                  title={product.title}
-                  price={product.price}
-                  product={product}
-                  onAdd={() => console.log(`Added ${product.title}`)}
-                />
-              ))}
-            </View>
+        {/* Loading Indicator */}
+        {loading && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#0b8a0b" />
+            <Text style={styles.loadingText}>Loading products...</Text>
           </View>
-        ))}
+        )}
+
+        {/* Product Sections - Dynamic based on API data */}
+        {!loading && sections.map((section) => {
+          // Only show section if it has products
+          if (section.data.length === 0) return null;
+
+          return (
+            <View key={section.name} style={styles.productSection}>
+              {/* Section header with title + View All */}
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>
+                  {section.icon} {section.name}
+                </Text>
+
+                <TouchableOpacity
+                  style={styles.viewAllButton}
+                  onPress={() => handleViewAll(section.name, section.data)}
+                >
+                  <Text style={styles.viewAllText}>View All</Text>
+                  <Icon name="arrow-forward" size={16} color="#dd7805" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Product grid */}
+<View style={styles.productGrid}>
+  {section.data.slice(0, 4).map((product) => (
+    <ProductCard
+      key={`${section.name}-${product.id}`}
+      image={product.image}
+      title={product.title}
+      price={product.price}
+      originalPrice={product.originalPrice}
+      discount={product.discount}
+      product={product.product}
+      onPress={() => navigation.navigate('ProductDetailScreen', { product: product })}
+      onAdd={() => console.log(`Added ${product.title}`)}
+    />
+  ))}
+</View>
+
+              {/* Show message if section has no products */}
+              {section.data.length === 0 && (
+                <View style={styles.emptySection}>
+                  <Text style={styles.emptyText}>No products available</Text>
+                </View>
+              )}
+            </View>
+          );
+        })}
+
+        {/* Show message if no sales are active */}
+        {!loading && flashSale.length === 0 && diwaliSale.length === 0 && festivalSale.length === 0 && (
+          <View style={styles.noSalesContainer}>
+            <Text style={styles.noSalesText}>No active sales at the moment</Text>
+            <Text style={styles.noSalesSubtext}>Check back soon for amazing deals!</Text>
+          </View>
+        )}
       </Animated.ScrollView>
     </View>
   );
@@ -369,6 +486,42 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#dd7805',
     fontWeight: '600',
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  loadingText: {
+    marginTop: 8,
+    color: '#666',
+    fontSize: 14,
+  },
+  emptySection: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+  },
+  emptyText: {
+    color: '#999',
+    fontSize: 14,
+  },
+  noSalesContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 16,
+  },
+  noSalesText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 8,
+  },
+  noSalesSubtext: {
+    fontSize: 14,
+    color: '#999',
   },
 });
 

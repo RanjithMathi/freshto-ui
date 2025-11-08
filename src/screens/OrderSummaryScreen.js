@@ -7,19 +7,23 @@ import {
   ScrollView,
   Image,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useCart } from '../context/CartContext';
 import { useAddress } from '../context/AddressContext';
 import { useOrder } from '../context/OrderContext';
+import orderService from '../services/orderService';
 
-const OrderSummaryScreen = ({ navigation }) => {
+const OrderSummaryScreen = ({ navigation, route }) => {
+  const { address,customerId } = route.params || {};
   const { cartItems, getTotalPrice, clearCart } = useCart();
-  const { selectedAddress } = useAddress();
+  const { selectedAddress } = route.params || {};
   const { deliverySlot, createOrder, calculateOrderTotal } = useOrder();
   
   const [selectedPayment, setSelectedPayment] = useState('cod');
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
 
   const deliveryCharge = getTotalPrice() > 500 ? 0 : 40;
   const totals = calculateOrderTotal(cartItems, deliveryCharge);
@@ -30,8 +34,13 @@ const OrderSummaryScreen = ({ navigation }) => {
     { id: 'card', label: 'Credit/Debit Card', icon: 'credit-card', available: true },
   ];
 
-  const handlePlaceOrder = () => {
-    if (!selectedAddress) {
+  const handlePlaceOrder = async () => {
+    console.log("address route", address);
+    
+    // Validation checks
+    const currentAddress = address || selectedAddress;
+    
+    if (!currentAddress) {
       Alert.alert('Error', 'Please select a delivery address');
       return;
     }
@@ -46,22 +55,113 @@ const OrderSummaryScreen = ({ navigation }) => {
       return;
     }
 
-    // Create order object
-    const orderData = {
-      items: cartItems,
-      address: selectedAddress,
-      deliverySlot: deliverySlot,
-      paymentMethod: selectedPayment,
-      subtotal: totals.subtotal,
-      deliveryCharge: totals.deliveryCharge,
-      tax: totals.tax,
-      total: totals.total,
-    };
+    if (cartItems.length === 0) {
+      Alert.alert('Error', 'Your cart is empty');
+      return;
+    }
 
-    const order = createOrder(orderData);
-    clearCart();
-    
-    navigation.navigate('OrderSuccess', { orderId: order.id });
+    setIsPlacingOrder(true);
+
+    try {
+      // Prepare order data matching your new CreateOrderRequest DTO
+      const orderRequest = {
+        customerId: customerId, // TODO: Replace with actual logged-in customer ID from auth context
+        addressId: currentAddress.id, // Use the address ID instead of full object
+        deliverySlot: `${deliverySlot.date} - ${deliverySlot.time}`,
+        paymentMethod: selectedPayment.toUpperCase(), // COD, UPI, CARD
+        specialInstructions: '', // Add a field in UI if you want users to add notes
+        orderItems: cartItems.map(item => ({
+          productId: item.id,
+          quantity: item.quantity,
+        })),
+      };
+
+      console.log('Placing order with request:', orderRequest);
+
+      // Call the order service to create order
+      const createdOrder = await orderService.createOrder(orderRequest);
+      
+      console.log('Order created successfully:', createdOrder);
+
+      // Store order locally in context (optional)
+      createOrder({
+        id: createdOrder.id,
+        customerId: createdOrder.customerId,
+        items: createdOrder.orderItems,
+        address: {
+          addressLine1: createdOrder.deliveryAddressLine1,
+          addressLine2: createdOrder.deliveryAddressLine2,
+          city: createdOrder.deliveryCity,
+          state: createdOrder.deliveryState,
+          zipCode: createdOrder.deliveryZipCode,
+          landmark: createdOrder.deliveryLandmark,
+          contactPhone: createdOrder.deliveryContactPhone,
+        },
+        totalAmount: createdOrder.totalAmount,
+        status: createdOrder.status,
+        orderDate: createdOrder.orderDate,
+      });
+      
+      // Clear the cart
+      clearCart();
+      
+      // Show success message and navigate
+      Alert.alert(
+        'Order Placed Successfully!',
+        `Your order #${createdOrder.id} has been placed successfully.`,
+        [
+          {
+            text: 'View Order',
+            onPress: () => {
+              navigation.navigate({
+                index: 0,
+                routes: [
+                  { name: 'Home' },
+                  { 
+                    name: 'OrderSuccess', 
+                    params: { 
+                      orderId: createdOrder.id,
+                      orderData: createdOrder 
+                    }
+                  }
+                ],
+              });
+            }
+          }
+        ]
+      );
+
+    } catch (error) {
+      console.error('Order placement error:', error);
+      
+      let errorMessage = 'Failed to place order. Please try again.';
+      
+      if (error.response) {
+        // Server responded with error
+        console.log('Error response:', error.response.data);
+        errorMessage = typeof error.response.data === 'string' 
+          ? error.response.data 
+          : error.response.data?.message || `Server error: ${error.response.status}`;
+      } else if (error.request) {
+        // Request made but no response
+        errorMessage = 'Cannot connect to server. Please check your internet connection.';
+      } else {
+        errorMessage = error.message || errorMessage;
+      }
+      
+      Alert.alert('Order Failed', errorMessage, [
+        {
+          text: 'Retry',
+          onPress: handlePlaceOrder
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        }
+      ]);
+    } finally {
+      setIsPlacingOrder(false);
+    }
   };
 
   const renderAddressSection = () => (
@@ -76,24 +176,45 @@ const OrderSummaryScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.addressCard}>
-        <View style={styles.addressHeader}>
-          <Text style={styles.addressType}>{selectedAddress?.type}</Text>
-          {selectedAddress?.isDefault && (
-            <View style={styles.defaultBadge}>
-              <Text style={styles.defaultText}>Default</Text>
-            </View>
+      {(address || selectedAddress) ? (
+        <View style={styles.addressCard}>
+          <View style={styles.addressHeader}>
+            <Text style={styles.addressType}>
+              {address?.addressType || selectedAddress?.addressType}
+            </Text>
+            {(address?.isDefault || selectedAddress?.isDefault) && (
+              <View style={styles.defaultBadge}>
+                <Text style={styles.defaultText}>Default</Text>
+              </View>
+            )}
+          </View>
+          <Text style={styles.addressName}>
+            {address?.addressLine1 || selectedAddress?.addressLine1}
+          </Text>
+          <Text style={styles.addressPhone}>
+            {address?.contactPhone || selectedAddress?.contactPhone}
+          </Text>
+          <Text style={styles.addressDetail}>
+            {address?.addressLine2 || selectedAddress?.addressLine2}
+          </Text>
+          {(address?.landmark || selectedAddress?.landmark) && (
+            <Text style={styles.addressDetail}>
+              Near: {address?.landmark || selectedAddress?.landmark}
+            </Text>
           )}
+          <Text style={styles.addressDetail}>
+            {address?.city || selectedAddress?.city}, {address?.state || selectedAddress?.state} - {address?.zipCode || selectedAddress?.zipCode}
+          </Text>
         </View>
-        <Text style={styles.addressName}>{selectedAddress?.name}</Text>
-        <Text style={styles.addressPhone}>{selectedAddress?.phone}</Text>
-        <Text style={styles.addressDetail}>
-          {selectedAddress?.houseNo}, {selectedAddress?.area}
-        </Text>
-        <Text style={styles.addressDetail}>
-          {selectedAddress?.city}, {selectedAddress?.state} - {selectedAddress?.pincode}
-        </Text>
-      </View>
+      ) : (
+        <TouchableOpacity 
+          style={styles.addAddressCard}
+          onPress={() => navigation.navigate('AddressSelection')}
+        >
+          <Icon name="add-location" size={24} color="#0b8a0b" />
+          <Text style={styles.addAddressText}>Add Delivery Address</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 
@@ -109,13 +230,23 @@ const OrderSummaryScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.slotCard}>
-        <Icon name="calendar-today" size={18} color="#0b8a0b" />
-        <View style={styles.slotInfo}>
-          <Text style={styles.slotDate}>{deliverySlot?.date}</Text>
-          <Text style={styles.slotTime}>{deliverySlot?.time}</Text>
+      {deliverySlot ? (
+        <View style={styles.slotCard}>
+          <Icon name="calendar-today" size={18} color="#0b8a0b" />
+          <View style={styles.slotInfo}>
+            <Text style={styles.slotDate}>{deliverySlot.date}</Text>
+            <Text style={styles.slotTime}>{deliverySlot.time}</Text>
+          </View>
         </View>
-      </View>
+      ) : (
+        <TouchableOpacity 
+          style={styles.addAddressCard}
+          onPress={() => navigation.navigate('TimeSlotSelection')}
+        >
+          <Icon name="schedule" size={24} color="#0b8a0b" />
+          <Text style={styles.addAddressText}>Select Delivery Time</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 
@@ -135,12 +266,12 @@ const OrderSummaryScreen = ({ navigation }) => {
             <Text style={styles.itemTitle} numberOfLines={2}>
               {item.title}
             </Text>
-            <Text style={styles.itemPrice}>{item.price}</Text>
+            <Text style={styles.itemPrice}>₹{item.price}</Text>
           </View>
           <View style={styles.itemQuantity}>
             <Text style={styles.quantityText}>Qty: {item.quantity}</Text>
             <Text style={styles.itemTotal}>
-              ₹{parseInt(item.price.replace('₹', '')) * item.quantity}
+              ₹{(item.price) * item.quantity}
             </Text>
           </View>
         </View>
@@ -202,6 +333,7 @@ const OrderSummaryScreen = ({ navigation }) => {
           ]}
           onPress={() => setSelectedPayment(method.id)}
           activeOpacity={0.7}
+          disabled={isPlacingOrder}
         >
           <View style={styles.paymentLeft}>
             <Icon
@@ -221,7 +353,11 @@ const OrderSummaryScreen = ({ navigation }) => {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <TouchableOpacity 
+          onPress={() => navigation.goBack()} 
+          style={styles.backButton}
+          disabled={isPlacingOrder}
+        >
           <Icon name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Order Summary</Text>
@@ -243,12 +379,25 @@ const OrderSummaryScreen = ({ navigation }) => {
           <Text style={styles.footerTotal}>₹{totals.total}</Text>
         </View>
         <TouchableOpacity
-          style={styles.placeOrderButton}
+          style={[
+            styles.placeOrderButton,
+            isPlacingOrder && styles.placeOrderButtonDisabled
+          ]}
           onPress={handlePlaceOrder}
           activeOpacity={0.8}
+          disabled={isPlacingOrder}
         >
-          <Text style={styles.placeOrderText}>Place Order</Text>
-          <Icon name="arrow-forward" size={20} color="#fff" />
+          {isPlacingOrder ? (
+            <>
+              <ActivityIndicator color="#fff" size="small" />
+              <Text style={styles.placeOrderText}>Placing Order...</Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.placeOrderText}>Place Order</Text>
+              <Icon name="arrow-forward" size={20} color="#fff" />
+            </>
+          )}
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -315,6 +464,23 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: '#e0e0e0',
+  },
+  addAddressCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+    borderWidth: 2,
+    borderColor: '#0b8a0b',
+    borderStyle: 'dashed',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addAddressText: {
+    fontSize: 14,
+    color: '#0b8a0b',
+    fontWeight: '600',
+    marginLeft: 8,
   },
   addressHeader: {
     flexDirection: 'row',
@@ -538,10 +704,15 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 8,
   },
+  placeOrderButtonDisabled: {
+    backgroundColor: '#7ab87a',
+    opacity: 0.7,
+  },
   placeOrderText: {
     fontSize: 16,
     fontWeight: '600',
     color: '#fff',
+    marginLeft: 8,
     marginRight: 8,
   },
 });
