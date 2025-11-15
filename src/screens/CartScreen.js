@@ -79,21 +79,11 @@ const CartScreen = ({ navigation }) => {
     console.log('🗺️ Checking addresses for navigation');
     console.log('📍 Current addresses count:', addresses.length);
     console.log('👤 Current user ID:', user);
-    
-    // Check if user has any addresses
-    if (!addresses || addresses.length === 0) {
-      console.log('➕ No addresses found - navigating to add address');
-      // No addresses - navigate to add address screen
-      navigation.navigate('AddEditAddress', { 
-        mode: 'add',
-        isFirstTime: true,
-        customerId: user?.userId, // Pass customer ID explicitly
-      });
-    } else {
-      console.log('📋 Addresses found - navigating to address selection');
-      // Has addresses - navigate to address selection
-      navigation.navigate('AddressSelection',  { customerId: user.userId } );
-    }
+
+    // Always navigate to AddressSelection if user is logged in and has addresses
+    // The AddressSelection screen will handle the logic of showing addresses or prompting to add one
+    console.log('📋 Navigating to address selection');
+    navigation.navigate('AddressSelection', { customerId: user?.userId || user?.id });
   };
 
   const handleSendOTP = async () => {

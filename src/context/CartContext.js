@@ -1,4 +1,8 @@
+// ========================================
+// src/context/CartContext.js
+// ========================================
 import React, { createContext, useState, useContext } from 'react';
+import { parsePrice } from '../utils/imageHelper';
 
 const CartContext = createContext();
 
@@ -30,9 +34,10 @@ export const CartProvider = ({ children }) => {
         );
       }
       
-      // Add new item
+      // Add new item - ensure price is numeric
+      const numericPrice = parsePrice(product.price);
       showToast(`${product.title} added to cart!`, 'success');
-      return [...prevItems, { ...product, quantity }];
+      return [...prevItems, { ...product, price: numericPrice, quantity }];
     });
   };
 
@@ -75,11 +80,7 @@ export const CartProvider = ({ children }) => {
   // Get total price of all items
   const getTotalPrice = () => {
     return cartItems.reduce((total, item) => {
-      // Handle both string prices with ₹ symbol and numeric prices
-      const price = typeof item.price === 'string' 
-        ? item.price 
-        : item.price;
-      
+      const price = parsePrice(item.price);
       return total + (price * item.quantity);
     }, 0);
   };
@@ -91,6 +92,7 @@ export const CartProvider = ({ children }) => {
     removeFromCart,
     clearCart,
     getTotalItems,
+    getTotalQuantity,
     getTotalPrice,
     toast,
     hideToast,

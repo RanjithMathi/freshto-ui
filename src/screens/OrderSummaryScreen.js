@@ -14,6 +14,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useCart } from '../context/CartContext';
 import { useAddress } from '../context/AddressContext';
 import { useOrder } from '../context/OrderContext';
+import { useAuth } from '../context/AuthContext';
 import orderService from '../services/orderService';
 
 const OrderSummaryScreen = ({ navigation, route }) => {
@@ -21,6 +22,7 @@ const OrderSummaryScreen = ({ navigation, route }) => {
   const { cartItems, getTotalPrice, clearCart } = useCart();
   const { selectedAddress } = route.params || {};
   const { deliverySlot, createOrder, calculateOrderTotal } = useOrder();
+  const { isLoggedIn, user, login } = useAuth();
   
   const [selectedPayment, setSelectedPayment] = useState('cod');
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
@@ -36,10 +38,29 @@ const OrderSummaryScreen = ({ navigation, route }) => {
 
   const handlePlaceOrder = async () => {
     console.log("address route", address);
-    
+
+    // Check if user is logged in
+    if (!isLoggedIn || !user) {
+      Alert.alert(
+        'Login Required',
+        'Please login with your mobile number to place an order.',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel'
+          },
+          {
+            text: 'Login',
+            onPress: () => navigation.navigate('Cart') // Navigate back to cart where auth modal is shown
+          }
+        ]
+      );
+      return;
+    }
+
     // Validation checks
     const currentAddress = address || selectedAddress;
-    
+
     if (!currentAddress) {
       Alert.alert('Error', 'Please select a delivery address');
       return;
@@ -65,7 +86,7 @@ const OrderSummaryScreen = ({ navigation, route }) => {
     try {
       // Prepare order data matching your new CreateOrderRequest DTO
       const orderRequest = {
-        customerId: customerId, // TODO: Replace with actual logged-in customer ID from auth context
+        customerId: user.userId || user.id, // Use customer ID from AuthContext - fallback to userId
         addressId: currentAddress.id, // Use the address ID instead of full object
         deliverySlot: `${deliverySlot.date} - ${deliverySlot.time}`,
         paymentMethod: selectedPayment.toUpperCase(), // COD, UPI, CARD
@@ -105,31 +126,16 @@ const OrderSummaryScreen = ({ navigation, route }) => {
       // Clear the cart
       clearCart();
       
-      // Show success message and navigate
-      Alert.alert(
-        'Order Placed Successfully!',
-        `Your order #${createdOrder.id} has been placed successfully.`,
-        [
-          {
-            text: 'View Order',
-            onPress: () => {
-              navigation.navigate({
-                index: 0,
-                routes: [
-                  { name: 'Home' },
-                  { 
-                    name: 'OrderSuccess', 
-                    params: { 
-                      orderId: createdOrder.id,
-                      orderData: createdOrder 
-                    }
-                  }
-                ],
-              });
-            }
-          }
-        ]
-      );
+    // Navigate directly to OrderSuccess screen
+  navigation.replace('OrderSuccess', {
+    orderId: createdOrder.id,
+    orderData: {
+    ...createdOrder,
+    // Add the delivery slot and payment method since API might not return them
+    deliverySlot: `${deliverySlot.date} - ${deliverySlot.time}`,
+    paymentMethod: selectedPayment.toUpperCase(),
+  }
+  });
 
     } catch (error) {
       console.error('Order placement error:', error);

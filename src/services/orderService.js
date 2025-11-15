@@ -1,8 +1,8 @@
+// ========================================
 // src/services/orderService.js
-
+// ========================================
 import apiClient from './apiClient';
 import { API_ENDPOINTS } from '../config/api.config';
-import { OrderStatus } from '../types/api.types';
 
 class OrderService {
   async getAllOrders() {
@@ -23,11 +23,9 @@ class OrderService {
     }
   }
 
-  async getOrdersByCustomer(customerId) {
+  async getOrdersByCustomerId(customerId) {
     try {
-      return await apiClient.get(
-        API_ENDPOINTS.ORDERS_BY_CUSTOMER(customerId)
-      );
+      return await apiClient.get(API_ENDPOINTS.ORDERS_BY_CUSTOMER(customerId));
     } catch (error) {
       console.error(`Error fetching orders for customer ${customerId}:`, error);
       throw error;
@@ -36,29 +34,28 @@ class OrderService {
 
   async getOrdersByStatus(status) {
     try {
-      return await apiClient.get(
-        API_ENDPOINTS.ORDERS_BY_STATUS(status)
-      );
+      return await apiClient.get(API_ENDPOINTS.ORDERS_BY_STATUS(status));
     } catch (error) {
       console.error(`Error fetching orders with status ${status}:`, error);
       throw error;
     }
   }
 
-  async createOrder(order) {
+  async createOrder(orderData) {
     try {
-      return await apiClient.post('http://192.168.0.127:8080/api/orders', order);
+      console.log('📦 Creating order with data:', orderData);
+      const response = await apiClient.post(API_ENDPOINTS.ORDERS, orderData);
+      console.log('✅ Order created:', response);
+      return response;
     } catch (error) {
-      console.error('Error creating order:', error);
+      console.error('❌ Error creating order:', error);
       throw error;
     }
   }
 
   async updateOrderStatus(id, status) {
     try {
-      return await apiClient.patch(
-        API_ENDPOINTS.UPDATE_ORDER_STATUS(id, status)
-      );
+      return await apiClient.patch(API_ENDPOINTS.UPDATE_ORDER_STATUS(id, status));
     } catch (error) {
       console.error(`Error updating order status ${id}:`, error);
       throw error;
@@ -77,23 +74,29 @@ class OrderService {
   /**
    * Helper method to create order from cart
    * @param {number} customerId 
-   * @param {string} deliveryAddress 
-   * @param {Array<{productId: number, quantity: number}>} cartItems 
+   * @param {number} addressId 
+   * @param {string} deliverySlot 
+   * @param {string} paymentMethod 
+   * @param {Array<{productId: number, quantity: number}>} orderItems 
    * @param {string} [specialInstructions]
    * @returns {Promise<Order>}
    */
   async createOrderFromCart(
     customerId,
-    deliveryAddress,
-    cartItems,
-    specialInstructions
+    addressId,
+    deliverySlot,
+    paymentMethod,
+    orderItems,
+    specialInstructions = ''
   ) {
     const orderData = {
-      customer: { id: customerId },
-      deliveryAddress,
+      customerId,
+      addressId,
+      deliverySlot,
+      paymentMethod: paymentMethod.toUpperCase(),
       specialInstructions,
-      orderItems: cartItems.map(item => ({
-        product: { id: item.productId },
+      orderItems: orderItems.map(item => ({
+        productId: item.productId || item.id,
         quantity: item.quantity,
       })),
     };

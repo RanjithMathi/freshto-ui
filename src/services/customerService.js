@@ -1,5 +1,6 @@
+// ========================================
 // src/services/customerService.js
-
+// ========================================
 import apiClient from './apiClient';
 import { API_ENDPOINTS } from '../config/api.config';
 
@@ -17,28 +18,34 @@ class CustomerService {
     try {
       return await apiClient.get(API_ENDPOINTS.CUSTOMER_BY_ID(id));
     } catch (error) {
-      console.error(`Error fetching customer ${id}:`, error);
+      console.error('Error fetching customer:', error);
       throw error;
     }
   }
 
-  async createCustomer(customer) {
+  async getCustomerByPhone(phone) {
     try {
-      return await apiClient.post(API_ENDPOINTS.CUSTOMERS, customer);
+      return await apiClient.get(API_ENDPOINTS.CUSTOMER_BY_PHONE(phone));
+    } catch (error) {
+      console.error('Error fetching customer by phone:', error);
+      throw error;
+    }
+  }
+
+  async createCustomer(customerData) {
+    try {
+      return await apiClient.post(API_ENDPOINTS.CUSTOMERS, customerData);
     } catch (error) {
       console.error('Error creating customer:', error);
       throw error;
     }
   }
 
-  async updateCustomer(id, customer) {
+  async updateCustomer(id, customerData) {
     try {
-      return await apiClient.put(
-        API_ENDPOINTS.CUSTOMER_BY_ID(id),
-        customer
-      );
+      return await apiClient.put(API_ENDPOINTS.UPDATE_CUSTOMER_BY_ID(id), customerData);
     } catch (error) {
-      console.error(`Error updating customer ${id}:`, error);
+      console.error('Error updating customer:', error);
       throw error;
     }
   }
@@ -46,8 +53,9 @@ class CustomerService {
   async deleteCustomer(id) {
     try {
       await apiClient.delete(API_ENDPOINTS.CUSTOMER_BY_ID(id));
+      return true;
     } catch (error) {
-      console.error(`Error deleting customer ${id}:`, error);
+      console.error('Error deleting customer:', error);
       throw error;
     }
   }

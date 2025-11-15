@@ -1,3 +1,4 @@
+// src/screens/HomeScreen.js
 import React, { useRef, useEffect, useState } from 'react';
 import {
   Text,
@@ -17,11 +18,10 @@ import CircleMenu from '../components/CircleMenu';
 import ProductCard from '../components/ProductCard';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import productService from '../services/productService';
+import { API_CONFIG } from '../config/api.config';
 
 // Local images for fallback
 import product1 from '../assets/images/careo-5.jpg';
-import product2 from '../assets/images/careo-3.jpg';
-import product3 from '../assets/images/careo-1.jpg';
 
 // Banner images with their associated categories
 const bannerData = [
@@ -46,7 +46,6 @@ const { width } = Dimensions.get('window');
 
 const HEADER_TOP_HEIGHT = 60;
 const SEARCH_BAR_HEIGHT = 50;
-const API_BASE_URL = 'http://192.168.0.127:8080';
 
 const HomeScreen = ({ navigation }) => {
   const flatListRef = useRef(null);
@@ -55,6 +54,7 @@ const HomeScreen = ({ navigation }) => {
   const scrollY = useRef(new Animated.Value(0)).current;
   
   // Sale products state
+  const [regularSale, setRegularSale] = useState([]);
   const [flashSale, setFlashSale] = useState([]);
   const [diwaliSale, setDiwaliSale] = useState([]);
   const [festivalSale, setFestivalSale] = useState([]);
@@ -68,22 +68,20 @@ const HomeScreen = ({ navigation }) => {
   const fetchSaleProducts = async () => {
     try {
       setLoading(true);
-      
-      // Fetch Flash Sale products
-      const flashResponse = await fetch(`${API_BASE_URL}/api/products/sale/FLASH_SALE`);
-      const flashData = await flashResponse.json();
+
+      // Fetch all sale types in parallel
+      const [regularData, flashData, diwaliData, festivalData] = await Promise.all([
+        productService.getProductsBySaleType('REGULAR').catch(() => []),
+        productService.getProductsBySaleType('FLASH_SALE').catch(() => []),
+        productService.getProductsBySaleType('DIWALI_SALE').catch(() => []),
+        productService.getProductsBySaleType('FESTIVAL_SALE').catch(() => []),
+      ]);
+
+      setRegularSale(formatProducts(regularData));
       setFlashSale(formatProducts(flashData));
-
-      // Fetch Diwali Sale products
-      const diwaliResponse = await fetch(`${API_BASE_URL}/api/products/sale/DIWALI_SALE`);
-      const diwaliData = await diwaliResponse.json();
       setDiwaliSale(formatProducts(diwaliData));
-
-      // Fetch Festival Sale products
-      const festivalResponse = await fetch(`${API_BASE_URL}/api/products/sale/FESTIVAL_SALE`);
-      const festivalData = await festivalResponse.json();
       setFestivalSale(formatProducts(festivalData));
-      
+
     } catch (error) {
       console.error('Error fetching sale products:', error);
     } finally {
@@ -93,16 +91,18 @@ const HomeScreen = ({ navigation }) => {
 
   // Format products from API response
   const formatProducts = (products) => {
+    if (!Array.isArray(products)) return [];
+    
     return products.map((product) => ({
       id: product.id?.toString(),
       title: product.name,
-      price: `₹${product.price}`,
-      originalPrice: product.originalPrice ? `₹${product.originalPrice}` : null,
+      price: product.price,
+      originalPrice: product.originalPrice || null,
       discount: product.discountPercentage ? `${product.discountPercentage}% OFF` : null,
       image: product.imagePath 
-        ? { uri: `${API_BASE_URL}/api/products/images/${product.imagePath}` }
-        : product1, // fallback image
-      product: product, // Keep original product data
+        ? { uri: productService.getImageUrl(product.imagePath) }
+        : product1,
+      product: product,
     }));
   };
 
@@ -135,14 +135,13 @@ const HomeScreen = ({ navigation }) => {
     });
   };
 
-  // Handle banner click to navigate to category
   const handleBannerPress = (category) => {
     navigation.navigate('CategoryProducts', {
       category: category,
     });
   };
 
-  // Animate header up & search bar sliding to top
+  // Animate header
   const headerTranslateY = scrollY.interpolate({
     inputRange: [0, HEADER_TOP_HEIGHT],
     outputRange: [0, -HEADER_TOP_HEIGHT],
@@ -161,28 +160,13 @@ const HomeScreen = ({ navigation }) => {
     extrapolate: 'clamp',
   });
 
-  // Get section data based on section name
-  const getSectionData = (sectionName) => {
-    switch (sectionName) {
-      case 'Flash Sale':
-        return flashSale;
-      case 'Diwali Sale':
-        return diwaliSale;
-      case 'Festival Sale':
-        return festivalSale;
-      default:
-        return [];
-    }
-  };
-
-  // Define sections with their data
   const sections = [
-    { name: 'Flash Sale', icon: '⚡', data: flashSale },
-    { name: 'Festival Sale', icon: '🎉', data: festivalSale },
-    { name: 'Diwali Sale', icon: '🪔', data: diwaliSale },
+    { name: 'Flash Sale', icon: '⚡', data: flashSale, horizontal: true },
+    { name: 'Regular Products', icon: '🛒', data: regularSale, horizontal: true },
+    { name: 'Festival Sale', icon: '🎉', data: festivalSale, horizontal: false },
+    { name: 'Diwali Sale', icon: '🪔', data: diwaliSale, horizontal: false },
   ];
 
-  // Render banner item with TouchableOpacity
   const renderBannerItem = ({ item }) => (
     <TouchableOpacity 
       activeOpacity={0.9}
@@ -192,12 +176,25 @@ const HomeScreen = ({ navigation }) => {
     </TouchableOpacity>
   );
 
+  // Render horizontal product card
+  const renderHorizontalProduct = ({ item, sectionName }) => (
+    <View style={styles.horizontalCardWrapper}>
+      <ProductCard
+        image={item.image}
+        title={item.title}
+        price={`₹${item.price}`}
+        originalPrice={item.originalPrice ? `₹${item.originalPrice}` : null}
+        discount={item.discount}
+        product={item.product}
+        onPress={() => navigation.navigate('ProductDetailScreen', { product: item })}
+        isHorizontal={true}
+      />
+    </View>
+  );
+
   return (
     <View style={styles.container}>
-      {/* Status Bar Styling */}
       <StatusBar backgroundColor="#0b8a0b" barStyle="light-content" />
-
-      {/* Safe area for status bar with green background */}
       <SafeAreaView style={styles.statusBarBackground} />
 
       {/* Animated Top Header */}
@@ -210,7 +207,6 @@ const HomeScreen = ({ navigation }) => {
           },
         ]}
       >
-        {/* Location Section - Left Side */}
         <TouchableOpacity style={styles.locationContainer}>
           <Icon name="location-on" size={20} color="#fff" />
           <View style={styles.locationTextContainer}>
@@ -221,11 +217,10 @@ const HomeScreen = ({ navigation }) => {
           </View>
         </TouchableOpacity>
 
-        {/* Logo - Right Side */}
         <Image source={require('../assets/images/logo.png')} style={styles.logoImage} />
       </Animated.View>
 
-      {/* Search bar that moves up on scroll */}
+      {/* Search bar */}
       <Animated.View
         style={[
           styles.searchBarContainer,
@@ -256,7 +251,7 @@ const HomeScreen = ({ navigation }) => {
           { useNativeDriver: true }
         )}
       >
-        {/* Carousel - Clickable without indicators */}
+        {/* Carousel */}
         <FlatList
           ref={flatListRef}
           data={bannerData}
@@ -300,14 +295,12 @@ const HomeScreen = ({ navigation }) => {
           </View>
         )}
 
-        {/* Product Sections - Dynamic based on API data */}
+        {/* Product Sections */}
         {!loading && sections.map((section) => {
-          // Only show section if it has products
           if (section.data.length === 0) return null;
 
           return (
             <View key={section.name} style={styles.productSection}>
-              {/* Section header with title + View All */}
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>
                   {section.icon} {section.name}
@@ -322,37 +315,40 @@ const HomeScreen = ({ navigation }) => {
                 </TouchableOpacity>
               </View>
 
-              {/* Product grid */}
-<View style={styles.productGrid}>
-  {section.data.slice(0, 4).map((product) => (
-    <ProductCard
-      key={`${section.name}-${product.id}`}
-      image={product.image}
-      title={product.title}
-      price={product.price}
-      originalPrice={product.originalPrice}
-      discount={product.discount}
-      product={product.product}
-      onPress={() => navigation.navigate('ProductDetailScreen', { product: product })}
-      onAdd={() => console.log(`Added ${product.title}`)}
-    />
-  ))}
-</View>
-
-              {/* Show message if section has no products */}
-              {section.data.length === 0 && (
-                <View style={styles.emptySection}>
-                  <Text style={styles.emptyText}>No products available</Text>
+              {/* Render horizontal or grid based on section type */}
+              {section.horizontal ? (
+                <FlatList
+                  data={section.data}
+                  renderItem={(item) => renderHorizontalProduct({ ...item, sectionName: section.name })}
+                  keyExtractor={(item) => `${section.name}-${item.id}`}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.horizontalListContainer}
+                />
+              ) : (
+                <View style={styles.productGrid}>
+                  {section.data.slice(0, 4).map((product) => (
+                    <ProductCard
+                      key={`${section.name}-${product.id}`}
+                      image={product.image}
+                      title={product.title}
+                      price={`₹${product.price}`}
+                      originalPrice={product.originalPrice ? `₹${product.originalPrice}` : null}
+                      discount={product.discount}
+                      product={product.product}
+                      onPress={() => navigation.navigate('ProductDetailScreen', { product: product })}
+                    />
+                  ))}
                 </View>
               )}
             </View>
           );
         })}
 
-        {/* Show message if no sales are active */}
-        {!loading && flashSale.length === 0 && diwaliSale.length === 0 && festivalSale.length === 0 && (
+        {/* No sales message */}
+        {!loading && regularSale.length === 0 && flashSale.length === 0 && diwaliSale.length === 0 && festivalSale.length === 0 && (
           <View style={styles.noSalesContainer}>
-            <Text style={styles.noSalesText}>No active sales at the moment</Text>
+            <Text style={styles.noSalesText}>No products available at the moment</Text>
             <Text style={styles.noSalesSubtext}>Check back soon for amazing deals!</Text>
           </View>
         )}
@@ -487,6 +483,14 @@ const styles = StyleSheet.create({
     color: '#dd7805',
     fontWeight: '600',
   },
+  horizontalListContainer: {
+    paddingLeft: 16,
+    paddingRight: 8,
+  },
+  horizontalCardWrapper: {
+    marginRight: 12,
+    width: width * 0.42,
+  },
   loadingContainer: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -495,16 +499,6 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 8,
     color: '#666',
-    fontSize: 14,
-  },
-  emptySection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 20,
-    paddingHorizontal: 16,
-  },
-  emptyText: {
-    color: '#999',
     fontSize: 14,
   },
   noSalesContainer: {

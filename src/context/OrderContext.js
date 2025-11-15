@@ -1,4 +1,8 @@
+// ========================================
+// src/context/OrderContext.js
+// ========================================
 import React, { createContext, useState, useContext } from 'react';
+import { parsePrice } from '../utils/imageHelper';
 
 const OrderContext = createContext();
 
@@ -19,11 +23,11 @@ export const OrderProvider = ({ children }) => {
   // Create new order
   const createOrder = (orderData) => {
     const newOrder = {
-      id: `ORD${Date.now()}`,
+      id: orderData.id || `ORD${Date.now()}`,
       ...orderData,
-      status: 'confirmed',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      status: orderData.status || 'confirmed',
+      createdAt: orderData.createdAt || new Date().toISOString(),
+      updatedAt: orderData.updatedAt || new Date().toISOString(),
     };
 
     setOrders((prev) => [newOrder, ...prev]);
@@ -79,8 +83,8 @@ export const OrderProvider = ({ children }) => {
   // Calculate order totals
   const calculateOrderTotal = (items, deliveryCharge = 0) => {
     const subtotal = items.reduce((sum, item) => {
-      const price = item.price;
-      return sum + price * item.quantity;
+      const price = parsePrice(item.price);
+      return sum + (price * item.quantity);
     }, 0);
 
     const tax = subtotal * 0.05; // 5% tax

@@ -1,3 +1,6 @@
+// ========================================
+// src/screens/ProductDetailScreen.js
+// ========================================
 import React, { useState } from 'react';
 import {
   View,
@@ -16,18 +19,15 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import IconFA from 'react-native-vector-icons/FontAwesome';
 import { useCart } from '../context/CartContext';
 import ToastNotification from '../components/ToastNotification';
+import { formatPrice, parsePrice, getProductImage } from '../utils/imageHelper';
+import product1 from '../assets/images/careo-5.jpg';
 
 const { width, height } = Dimensions.get('window');
 
 const ProductDetailScreen = ({ route, navigation }) => {
-  // Handle both cases: direct product object or nested product.product
   const passedProduct = route.params?.product;
   const productData = passedProduct?.product || passedProduct;
   
-  console.log("passedProduct:", passedProduct);
-  console.log("productData:", productData);
-  
-  // Check if product data exists
   if (!productData) {
     return (
       <View style={styles.errorContainer}>
@@ -48,23 +48,21 @@ const ProductDetailScreen = ({ route, navigation }) => {
   const [quantity, setQuantity] = useState(1);
   const { addToCart, getTotalItems, getTotalPrice, toast, hideToast } = useCart();
 
-  // Extract product details with fallbacks
+  // Extract product details
   const product = {
     id: productData.id,
-    title: productData.title || productData.name || 'Product',
-    price: productData.price || passedProduct?.price || 0,
+    title: productData.name || productData.title || 'Product',
+    price: productData.price,
     originalPrice: productData.originalPrice || passedProduct?.originalPrice,
     discount: productData.discountPercentage 
       ? `${productData.discountPercentage}% OFF` 
       : passedProduct?.discount,
-    image: productData.imagePath 
-      ? { uri: `http://192.168.0.127:8080/api/products/images/${productData.imagePath}` }
-      : passedProduct?.image || require('../assets/images/careo-5.jpg'),
+    image: getProductImage(productData.imagePath, passedProduct?.image || product1),
     description: productData.description || 'Premium quality product sourced from trusted suppliers.',
   };
 
   const handleWhatsAppShare = () => {
-    const message = `Check out this product: ${product.title} - ₹${product.price}`;
+    const message = `Check out this product: ${product.title} - ${formatPrice(product.price)}`;
     const url = `whatsapp://send?text=${encodeURIComponent(message)}`;
     Linking.openURL(url).catch(() => {
       Alert.alert('Error', 'Make sure WhatsApp is installed on your device');
@@ -77,19 +75,17 @@ const ProductDetailScreen = ({ route, navigation }) => {
 
   const handleAddToCart = () => {
     try {
-      // Create a complete product object for the cart
       const cartProduct = {
         id: product.id,
         title: product.title,
-        price: product.price,
+        price: parsePrice(product.price),
         image: product.image,
         originalPrice: product.originalPrice,
         discount: product.discount,
-        product: productData, // Keep original data
+        product: productData,
       };
       
       addToCart(cartProduct, quantity);
-      // Toast will be shown automatically by CartContext
     } catch (error) {
       Alert.alert('Error', 'Failed to add item to cart');
       console.error('Add to cart error:', error);
@@ -108,12 +104,12 @@ const ProductDetailScreen = ({ route, navigation }) => {
 
   const totalItems = getTotalItems();
   const totalPrice = getTotalPrice();
+  const itemTotal = parsePrice(product.price) * quantity;
 
   return (
     <View style={styles.container}>
       <StatusBar backgroundColor="transparent" barStyle="light-content" translucent />
 
-      {/* Toast Notification */}
       <ToastNotification
         visible={toast.visible}
         message={toast.message}
@@ -121,7 +117,7 @@ const ProductDetailScreen = ({ route, navigation }) => {
         onHide={hideToast}
       />
 
-      {/* Fixed Top Icons - Stay on top while scrolling */}
+      {/* Fixed Top Icons */}
       <SafeAreaView style={styles.topIconsContainer}>
         <TouchableOpacity
           style={styles.iconButton}
@@ -130,7 +126,6 @@ const ProductDetailScreen = ({ route, navigation }) => {
           <Icon name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
 
-        {/* Right Side Icons */}
         <View style={styles.rightIcons}>
           <TouchableOpacity
             style={styles.iconButton}
@@ -152,19 +147,17 @@ const ProductDetailScreen = ({ route, navigation }) => {
         </View>
       </SafeAreaView>
 
-      {/* Scrollable Content including Image */}
+      {/* Scrollable Content */}
       <ScrollView
         style={styles.scrollContainer}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Product Image - Now Scrollable */}
+        {/* Product Image */}
         <View style={styles.imageContainer}>
           <Image source={product.image} style={styles.productImage} resizeMode="cover" />
-          {/* Gradient Overlay for better icon visibility at top */}
           <View style={styles.gradientOverlay} />
           
-          {/* Discount Badge on Image */}
           {product.discount && (
             <View style={styles.discountBadge}>
               <Text style={styles.discountText}>{product.discount}</Text>
@@ -174,14 +167,13 @@ const ProductDetailScreen = ({ route, navigation }) => {
 
         {/* Content Section */}
         <View style={styles.contentContainer}>
-          {/* Product Title */}
           <Text style={styles.productTitle}>{product.title}</Text>
 
           {/* Price Section */}
           <View style={styles.priceContainer}>
-            <Text style={styles.currentPrice}>₹{product.price}</Text>
+            <Text style={styles.currentPrice}>{formatPrice(product.price)}</Text>
             {product.originalPrice && (
-              <Text style={styles.originalPriceText}>₹{product.originalPrice}</Text>
+              <Text style={styles.originalPriceText}>{formatPrice(product.originalPrice)}</Text>
             )}
           </View>
 
@@ -209,9 +201,7 @@ const ProductDetailScreen = ({ route, navigation }) => {
           {/* Product Description */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Product Details</Text>
-            <Text style={styles.description}>
-              {product.description || 'Our premium fresh chicken is sourced from trusted local farms, ensuring the highest quality and freshness. Each piece is carefully selected and hygienically packed to maintain its natural flavor and nutritional value. Perfect for grilling, roasting, or curry preparations. Rich in protein and low in fat, this chicken is ideal for health-conscious consumers looking for quality meat products.'}
-            </Text>
+            <Text style={styles.description}>{product.description}</Text>
           </View>
 
           {/* Storage Instructions */}
@@ -227,28 +217,16 @@ const ProductDetailScreen = ({ route, navigation }) => {
             </Text>
           </View>
 
-          {/* Marketed By */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Marketed By</Text>
-            <Text style={styles.description}>
-              Fresh Chicken Mart Private Limited{'\n'}
-              Namakkal, Tamil Nadu - 637001{'\n'}
-              FSSAI License No: 12345678901234{'\n'}
-              Customer Care: +91 9876543210
-            </Text>
-          </View>
-
-          {/* Extra space for bottom fixed sections */}
           <View style={{ height: totalItems > 0 ? 160 : 100 }} />
         </View>
       </ScrollView>
 
-      {/* Cart Summary Bar - Shows when items in cart */}
+      {/* Cart Summary Bar */}
       {totalItems > 0 && !fromCart && (
         <View style={styles.cartSummaryBar}>
           <View style={styles.cartSummaryContent}>
             <Text style={styles.cartSummaryText}>
-              {totalItems} {totalItems === 1 ? 'item' : 'items'} | ₹{totalPrice.toFixed(2)}
+              {totalItems} {totalItems === 1 ? 'item' : 'items'} | {formatPrice(totalPrice)}
             </Text>
             <TouchableOpacity
               style={styles.viewCartButton}
@@ -261,24 +239,20 @@ const ProductDetailScreen = ({ route, navigation }) => {
         </View>
       )}
 
-      {/* Fixed Bottom Section - Add to Cart Button (Hide if from cart) */}
+      {/* Fixed Bottom Section */}
       {!fromCart && (
         <View style={[styles.bottomSection, totalItems > 0 && styles.bottomSectionWithCart]}>
           <View style={styles.bottomContainer}>
-            {/* Left Side - Total Price */}
             <View style={styles.priceSection}>
               <Text style={styles.priceLabel}>Total Price</Text>
-              <Text style={styles.price}>
-                ₹{(product.price * quantity).toFixed(2)}
-              </Text>
+              <Text style={styles.price}>{formatPrice(itemTotal)}</Text>
               {quantity > 1 && (
                 <Text style={styles.perItemText}>
-                  ₹{product.price} × {quantity}
+                  {formatPrice(product.price)} × {quantity}
                 </Text>
               )}
             </View>
 
-            {/* Right Side - Add Button & Delivery Info */}
             <View style={styles.addSection}>
               <TouchableOpacity
                 style={styles.addToCartButton}
@@ -288,7 +262,6 @@ const ProductDetailScreen = ({ route, navigation }) => {
                 <Text style={styles.addToCartText}>Add to Cart</Text>
               </TouchableOpacity>
 
-              {/* Delivery Info */}
               <View style={styles.deliveryInfo}>
                 <Icon name="local-shipping" size={14} color="#0b8a0b" />
                 <Text style={styles.deliveryText}>Delivered within 30 minutes</Text>
@@ -301,6 +274,7 @@ const ProductDetailScreen = ({ route, navigation }) => {
   );
 };
 
+// Styles remain the same as before...
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -475,7 +449,6 @@ const styles = StyleSheet.create({
     color: '#666',
     lineHeight: 22,
   },
-  // Cart Summary Bar Styles
   cartSummaryBar: {
     position: 'absolute',
     bottom: 90,
@@ -489,10 +462,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     elevation: 15,
-    shadowColor: '#0b8a0b',
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
   },
   cartSummaryContent: {
     flexDirection: 'row',
@@ -512,10 +481,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderRadius: 8,
     elevation: 3,
-    shadowColor: '#0b8a0b',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 3,
   },
   viewCartText: {
     color: '#fff',
@@ -523,7 +488,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginRight: 4,
   },
-  // Bottom Section Styles
   bottomSection: {
     position: 'absolute',
     bottom: 0,
@@ -535,10 +499,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
   },
   bottomSectionWithCart: {
     elevation: 12,
@@ -579,10 +539,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     borderRadius: 8,
     elevation: 2,
-    shadowColor: '#0b8a0b',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
   },
   addToCartText: {
     color: '#fff',

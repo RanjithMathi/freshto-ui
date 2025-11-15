@@ -1,10 +1,10 @@
+// ========================================
 // src/context/AddressContext.js
+// ========================================
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_CONFIG } from '../config/api.config';
-
-const API_BASE_URL = API_CONFIG.BASE_URL;
+import { API_CONFIG, API_ENDPOINTS } from '../config/api.config';
 
 const AddressContext = createContext();
 
@@ -28,14 +28,11 @@ export const AddressProvider = ({ children }) => {
         const user = JSON.parse(userData);
         console.log('👤 AddressContext - Parsed user:', user);
         
-        // ✅ Now using 'id' consistently
-        const userId = user.userId;
+        const userId = user.id; // ✅ Consistent with AuthContext
         
         if (userId) {
           console.log('✅ AddressContext - Customer ID found:', userId);
           setCustomerId(userId);
-          
-          // Automatically fetch addresses when customer ID is loaded
           await fetchAddresses(userId);
         } else {
           console.warn('⚠️ AddressContext - No customer ID in user data');
@@ -45,6 +42,29 @@ export const AddressProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('❌ AddressContext - Error loading customer ID:', error);
+    }
+  };
+
+  /**
+   * Get auth headers with token
+   */
+  const getAuthHeaders = async () => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      console.log('🔑 Auth token retrieved:', token ? 'Token exists' : 'No token');
+      
+      if (!token) {
+        console.warn('⚠️ No authentication token found');
+        return {};
+      }
+
+      return {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      };
+    } catch (error) {
+      console.error('❌ Error getting auth headers:', error);
+      return {};
     }
   };
 
@@ -59,7 +79,6 @@ export const AddressProvider = ({ children }) => {
 
   /**
    * Fetch all addresses for a customer
-   * GET /api/addresses/customer/{customerId}
    */
   const fetchAddresses = async (custId = customerId) => {
     if (!custId) {
@@ -71,31 +90,42 @@ export const AddressProvider = ({ children }) => {
     setLoading(true);
     
     try {
-      const response = await axios.get(`${API_BASE_URL}/addresses/customer/${custId}`);
+      const headers = await getAuthHeaders();
+      const url = `${API_CONFIG.BASE_URL}${API_ENDPOINTS.ADDRESSES_BY_CUSTOMER(custId)}`;
+      console.log('🌐 Fetching from:', url);
+      console.log('🔐 Using headers:', headers);
+      
+      const response = await axios.get(url, { headers });
       console.log('✅ Addresses fetched:', response.data);
       
-      setAddresses(response.data);
-      
-      // Find and set default address
-     const addressList = Array.isArray(response.data)
-  ? response.data
-  : Array.isArray(response.data?.data)
-  ? response.data.data
-  : [];
+      const addressList = Array.isArray(response.data)
+        ? response.data
+        : Array.isArray(response.data?.data)
+        ? response.data.data
+        : [];
 
-const defaultAddr = addressList.find(addr => addr.isDefault);
-setDefaultAddress(defaultAddr || addressList[0] || null);
+      setAddresses(addressList);
       
-      return response.data;
+      const defaultAddr = addressList.find(addr => addr.isDefault);
+      setDefaultAddress(defaultAddr || addressList[0] || null);
+      
+      return addressList;
     } catch (error) {
       console.error('❌ Error fetching addresses:', error);
+      console.error('Error details:', error.response?.data);
       
-      // If 404, it means no addresses exist yet - this is not an error
       if (error.response?.status === 404) {
         console.log('ℹ️ No addresses found for customer');
         setAddresses([]);
         setDefaultAddress(null);
         return [];
+      }
+      
+      if (error.response?.status === 403) {
+        console.error('🚫 Authorization failed - Token may be invalid or expired');
+        // Optionally: Clear token and redirect to login
+        // await AsyncStorage.removeItem('token');
+        // await AsyncStorage.removeItem('user');
       }
       
       throw error;
@@ -106,18 +136,18 @@ setDefaultAddress(defaultAddr || addressList[0] || null);
 
   /**
    * Get default address for a customer
-   * GET /api/addresses/customer/{customerId}/default
    */
   const fetchDefaultAddress = async (custId = customerId) => {
     if (!custId) return null;
 
     try {
-      const response = await axios.get(`${API_BASE_URL}/addresses/customer/${custId}/default`);
+      const headers = await getAuthHeaders();
+      const url = `${API_CONFIG.BASE_URL}${API_ENDPOINTS.ADDRESS_DEFAULT(custId)}`;
+      const response = await axios.get(url, { headers });
       console.log('✅ Default address fetched:', response.data);
       setDefaultAddress(response.data);
       return response.data;
     } catch (error) {
-      // If no default address found (404), return null
       if (error.response?.status === 404) {
         console.log('ℹ️ No default address found');
         return null;
@@ -129,7 +159,6 @@ setDefaultAddress(defaultAddr || addressList[0] || null);
 
   /**
    * Add a new address
-   * POST /api/addresses/customer/{customerId}
    */
   const addAddress = async (addressData, custId = customerId) => {
     if (!custId) {
@@ -140,101 +169,91 @@ setDefaultAddress(defaultAddr || addressList[0] || null);
     console.log('Address data:', addressData);
 
     try {
-      const response = await axios.post(
-        `${API_BASE_URL}/addresses/customer/${custId}`,
-        addressData
-      );
+      const headers = await getAuthHeaders();
+      const url = `${API_CONFIG.BASE_URL}${API_ENDPOINTS.ADDRESSES_BY_CUSTOMER(custId)}`;
+      const response = await axios.post(url, addressData, { headers });
       
       console.log('✅ Address added successfully:', response.data);
       
-      // Refresh addresses list
       await fetchAddresses(custId);
-      
       return response.data;
     } catch (error) {
       console.error('❌ Error adding address:', error);
+      console.error('Error details:', error.response?.data);
       throw error;
     }
   };
 
   /**
    * Update an existing address
-   * PUT /api/addresses/{id}
    */
   const updateAddress = async (addressId, addressData) => {
     console.log('✏️ Updating address:', addressId);
     
     try {
-      const response = await axios.put(
-        `${API_BASE_URL}/addresses/${addressId}`,
-        addressData
-      );
+      const headers = await getAuthHeaders();
+      const url = `${API_CONFIG.BASE_URL}${API_ENDPOINTS.ADDRESS_BY_ID(addressId)}`;
+      const response = await axios.put(url, addressData, { headers });
       
       console.log('✅ Address updated successfully');
-      
-      // Refresh addresses list
       await fetchAddresses(customerId);
-      
       return response.data;
     } catch (error) {
       console.error('❌ Error updating address:', error);
+      console.error('Error details:', error.response?.data);
       throw error;
     }
   };
 
   /**
    * Set an address as default
-   * PATCH /api/addresses/{id}/set-default
    */
   const setAsDefault = async (addressId) => {
     console.log('⭐ Setting address as default:', addressId);
     
     try {
-      const response = await axios.patch(
-        `${API_BASE_URL}/addresses/${addressId}/set-default`
-      );
+      const headers = await getAuthHeaders();
+      const url = `${API_CONFIG.BASE_URL}${API_ENDPOINTS.ADDRESS_SET_DEFAULT(addressId)}`;
+      const response = await axios.patch(url, {}, { headers });
       
       console.log('✅ Default address set');
-      
-      // Update local state
       setDefaultAddress(response.data);
-      
-      // Refresh addresses list to update isDefault flags
       await fetchAddresses(customerId);
-      
       return response.data;
     } catch (error) {
       console.error('❌ Error setting default address:', error);
+      console.error('Error details:', error.response?.data);
       throw error;
     }
   };
 
   /**
    * Delete an address
-   * DELETE /api/addresses/{id}
    */
   const deleteAddress = async (addressId) => {
     console.log('🗑️ Deleting address:', addressId);
     
     try {
-      await axios.delete(`${API_BASE_URL}/addresses/${addressId}`);
+      const headers = await getAuthHeaders();
+      const url = `${API_CONFIG.BASE_URL}${API_ENDPOINTS.ADDRESS_BY_ID(addressId)}`;
+      await axios.delete(url, { headers });
       console.log('✅ Address deleted successfully');
-      
-      // Refresh addresses list
       await fetchAddresses(customerId);
     } catch (error) {
       console.error('❌ Error deleting address:', error);
+      console.error('Error details:', error.response?.data);
       throw error;
     }
   };
 
   /**
    * Get a specific address by ID
-   * GET /api/addresses/{id}
    */
   const getAddressById = async (addressId) => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/addresses/${addressId}`);
+      const headers = await getAuthHeaders();
+      const url = `${API_CONFIG.BASE_URL}${API_ENDPOINTS.ADDRESS_BY_ID(addressId)}`;
+      const response = await axios.get(url, { headers });
       return response.data;
     } catch (error) {
       console.error('❌ Error fetching address:', error);
@@ -244,15 +263,14 @@ setDefaultAddress(defaultAddr || addressList[0] || null);
 
   /**
    * Get addresses by type
-   * GET /api/addresses/customer/{customerId}/type/{type}
    */
   const getAddressesByType = async (type, custId = customerId) => {
     if (!custId) return [];
 
     try {
-      const response = await axios.get(
-        `${API_BASE_URL}/addresses/customer/${custId}/type/${type}`
-      );
+      const headers = await getAuthHeaders();
+      const url = `${API_CONFIG.BASE_URL}${API_ENDPOINTS.ADDRESS_BY_TYPE(custId, type)}`;
+      const response = await axios.get(url, { headers });
       return response.data;
     } catch (error) {
       console.error('❌ Error fetching addresses by type:', error);
@@ -262,15 +280,14 @@ setDefaultAddress(defaultAddr || addressList[0] || null);
 
   /**
    * Check if customer has any addresses
-   * GET /api/addresses/customer/{customerId}/exists
    */
   const hasAddresses = async (custId = customerId) => {
     if (!custId) return false;
 
     try {
-      const response = await axios.get(
-        `${API_BASE_URL}/addresses/customer/${custId}/exists`
-      );
+      const headers = await getAuthHeaders();
+      const url = `${API_CONFIG.BASE_URL}${API_ENDPOINTS.ADDRESS_EXISTS(custId)}`;
+      const response = await axios.get(url, { headers });
       return response.data;
     } catch (error) {
       console.error('❌ Error checking addresses:', error);
@@ -308,19 +325,13 @@ setDefaultAddress(defaultAddr || addressList[0] || null);
     return displayNames[type] || type;
   };
 
-  /**
-   * Refresh addresses (alias for fetchAddresses)
-   */
   const refreshAddresses = fetchAddresses;
 
   const value = {
-    // State
     addresses,
     defaultAddress,
     loading,
     customerId,
-    
-    // Methods
     fetchAddresses,
     fetchDefaultAddress,
     addAddress,
@@ -331,9 +342,7 @@ setDefaultAddress(defaultAddr || addressList[0] || null);
     getAddressesByType,
     hasAddresses,
     refreshAddresses,
-    setCustomerIdManually, // New method to manually set customer ID
-    
-    // Helpers
+    setCustomerIdManually,
     getFullAddressString,
     getAddressTypeDisplay,
   };

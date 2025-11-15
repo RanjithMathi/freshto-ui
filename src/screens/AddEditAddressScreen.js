@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useAddress } from '../context/AddressContext';
+import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 
 const API_BASE_URL = 'http://192.168.0.127:8080/api'; // Update with your API URL
@@ -19,9 +20,11 @@ const API_BASE_URL = 'http://192.168.0.127:8080/api'; // Update with your API UR
 const AddEditAddressScreen = ({ navigation, route }) => {
   const { mode = 'add', address, isFirstTime = false, customerId } = route.params || {};
   const { refreshAddresses } = useAddress();
+  const { isLoggedIn, user } = useAuth();
 
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
+    name: '',
     addressLine1: '',
     addressLine2: '',
     landmark: '',
@@ -34,8 +37,28 @@ const AddEditAddressScreen = ({ navigation, route }) => {
   });
 
   useEffect(() => {
+    // Check authentication
+    if (!isLoggedIn || !user) {
+      Alert.alert(
+        'Login Required',
+        'Please login with your mobile number to add or edit addresses.',
+        [
+          {
+            text: 'Cancel',
+            onPress: () => navigation.goBack()
+          },
+          {
+            text: 'Login',
+            onPress: () => navigation.navigate('Cart') // Navigate to cart where auth modal is available
+          }
+        ]
+      );
+      return;
+    }
+
     if (mode === 'edit' && address) {
       setFormData({
+        name: address.name || '',
         addressLine1: address.addressLine1 || '',
         addressLine2: address.addressLine2 || '',
         landmark: address.landmark || '',
@@ -47,15 +70,19 @@ const AddEditAddressScreen = ({ navigation, route }) => {
         isDefault: address.isDefault || false,
       });
     }
-  }, [mode, address]);
+  }, [mode, address, isLoggedIn, user, navigation]);
 
   const handleInputChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   const validateForm = () => {
-    const { addressLine1, city, state, zipCode } = formData;
+    const { name, addressLine1, city, state, zipCode } = formData;
 
+    if (!name.trim()) {
+      Alert.alert('Error', 'Please enter recipient name');
+      return false;
+    }
     if (!addressLine1.trim()) {
       Alert.alert('Error', 'Please enter address line 1 (House/Flat number & Street)');
       return false;
@@ -85,15 +112,24 @@ const AddEditAddressScreen = ({ navigation, route }) => {
   const handleSave = async () => {
     if (!validateForm()) return;
 
+    // Double-check authentication before saving
+    if (!isLoggedIn || !user) {
+      Alert.alert('Login Required', 'Please login to save your address.');
+      return;
+    }
+
     setLoading(true);
     console.log("mode:",mode);
-    
-console.log("`${API_BASE_URL}/addresses/customer/${customerId}:",API_BASE_URL+'/addresses/customer/'+customerId);
+
+    const custId = user.userId || user.id; // Use authenticated user ID - fallback to userId if id is not available
+    console.log("custId:", custId);
+    console.log("user object:", user);
+    console.log("`${API_BASE_URL}/addresses/customer/${custId}:",API_BASE_URL+'/addresses/customer/'+custId);
 
     try {
       if (mode === 'add') {
         // POST /api/addresses/customer/{customerId}
-        await axios.post(`${API_BASE_URL}/addresses/customer/${customerId}`, formData);
+        await axios.post(`${API_BASE_URL}/addresses/customer/${custId}`, formData);
         Alert.alert('Success', 'Address added successfully');
       } else {
         // PUT /api/addresses/{id}
@@ -103,7 +139,7 @@ console.log("`${API_BASE_URL}/addresses/customer/${customerId}:",API_BASE_URL+'/
 
       // Refresh addresses in context
       if (refreshAddresses) {
-        await refreshAddresses(customerId);
+        await refreshAddresses(custId);
       }
 
       // For first-time users, navigate to AddressSelection instead of going back
@@ -188,13 +224,28 @@ console.log("`${API_BASE_URL}/addresses/customer/${customerId}:",API_BASE_URL+'/
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Address Details */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Address Details</Text>
+          <Text style={styles.sectionTitle}>📍 Address Details</Text>
+          <Text style={styles.sectionDescription}>
+            Please provide your complete delivery address for accurate order delivery
+          </Text>
+
+          <View style={styles.inputContainer}>
+            <Icon name="person" size={20} color="#666" style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Full name *"
+              placeholderTextColor="#999"
+              value={formData.name}
+              onChangeText={(value) => handleInputChange('name', value)}
+            />
+          </View>
 
           <View style={styles.inputContainer}>
             <Icon name="home" size={20} color="#666" style={styles.inputIcon} />
             <TextInput
               style={styles.input}
-              placeholder="House/Flat No. & Street *"
+              placeholder="House/flat & street *"
+              placeholderTextColor="#999"
               value={formData.addressLine1}
               onChangeText={(value) => handleInputChange('addressLine1', value)}
               multiline
@@ -205,7 +256,8 @@ console.log("`${API_BASE_URL}/addresses/customer/${customerId}:",API_BASE_URL+'/
             <Icon name="location-on" size={20} color="#666" style={styles.inputIcon} />
             <TextInput
               style={styles.input}
-              placeholder="Area/Locality (Optional)"
+              placeholder="Area/locality (Optional)"
+              placeholderTextColor="#999"
               value={formData.addressLine2}
               onChangeText={(value) => handleInputChange('addressLine2', value)}
               multiline
@@ -217,6 +269,7 @@ console.log("`${API_BASE_URL}/addresses/customer/${customerId}:",API_BASE_URL+'/
             <TextInput
               style={styles.input}
               placeholder="Landmark (Optional)"
+              placeholderTextColor="#999"
               value={formData.landmark}
               onChangeText={(value) => handleInputChange('landmark', value)}
             />
@@ -228,6 +281,7 @@ console.log("`${API_BASE_URL}/addresses/customer/${customerId}:",API_BASE_URL+'/
               <TextInput
                 style={styles.input}
                 placeholder="City *"
+                placeholderTextColor="#999"
                 value={formData.city}
                 onChangeText={(value) => handleInputChange('city', value)}
               />
@@ -238,6 +292,7 @@ console.log("`${API_BASE_URL}/addresses/customer/${customerId}:",API_BASE_URL+'/
               <TextInput
                 style={styles.input}
                 placeholder="State *"
+                placeholderTextColor="#999"
                 value={formData.state}
                 onChangeText={(value) => handleInputChange('state', value)}
               />
@@ -248,7 +303,8 @@ console.log("`${API_BASE_URL}/addresses/customer/${customerId}:",API_BASE_URL+'/
             <Icon name="pin-drop" size={20} color="#666" style={styles.inputIcon} />
             <TextInput
               style={styles.input}
-              placeholder="PIN Code *"
+              placeholder="PIN code *"
+              placeholderTextColor="#999"
               value={formData.zipCode}
               onChangeText={(value) => handleInputChange('zipCode', value)}
               keyboardType="number-pad"
@@ -259,27 +315,31 @@ console.log("`${API_BASE_URL}/addresses/customer/${customerId}:",API_BASE_URL+'/
 
         {/* Contact Information */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Contact Information (Optional)</Text>
+          <Text style={styles.sectionTitle}>📞 Contact Information (Optional)</Text>
+          <Text style={styles.sectionDescription}>
+            Add an alternate contact number for delivery coordination
+          </Text>
 
           <View style={styles.inputContainer}>
             <Icon name="phone" size={20} color="#666" style={styles.inputIcon} />
             <TextInput
               style={styles.input}
-              placeholder="Alternate Phone Number"
+              placeholder="Alternate phone (Optional)"
+              placeholderTextColor="#999"
               value={formData.contactPhone}
               onChangeText={(value) => handleInputChange('contactPhone', value)}
               keyboardType="phone-pad"
               maxLength={10}
             />
           </View>
-          <Text style={styles.helperText}>
-            Use if different from your registered number
-          </Text>
         </View>
 
         {/* Address Type */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Address Type</Text>
+          <Text style={styles.sectionTitle}>🏷️ Address Type</Text>
+          <Text style={styles.sectionDescription}>
+            Select the type of address to help us identify it easily
+          </Text>
           <View style={styles.typeContainer}>
             {renderAddressTypeButton('HOME', 'home', 'Home')}
             {renderAddressTypeButton('WORK', 'work', 'Work')}
@@ -415,6 +475,20 @@ const styles = StyleSheet.create({
     marginTop: -8,
     marginLeft: 4,
     marginBottom: 4,
+  },
+  sectionDescription: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  fieldHelper: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: -8,
+    marginLeft: 40,
+    marginBottom: 12,
+    fontStyle: 'italic',
   },
   row: {
     flexDirection: 'row',

@@ -29,7 +29,7 @@ class ApiClient {
           if (__DEV__) {
             console.log('📤 API Request:', {
               method: config.method?.toUpperCase(),
-              url: config.url,
+              url: `${API_CONFIG.BASE_URL}${config.url}`,
               data: JSON.stringify(config.data) || config.data,
             });
           }

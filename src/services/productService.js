@@ -1,5 +1,6 @@
+// ========================================
 // src/services/productService.js
-
+// ========================================
 import apiClient from './apiClient';
 import { API_ENDPOINTS } from '../config/api.config';
 
@@ -15,7 +16,7 @@ class ProductService {
 
   async getAvailableProducts() {
     try {
-      return await apiClient.get("http://192.168.0.127:8080/api/products/available");
+      return await apiClient.get(API_ENDPOINTS.PRODUCTS_AVAILABLE);
     } catch (error) {
       console.error('Error fetching available products:', error);
       throw error;
@@ -33,12 +34,20 @@ class ProductService {
 
   async getProductsByCategory(category) {
     try {
-      return await apiClient.get(
-        API_ENDPOINTS.PRODUCTS_BY_CATEGORY(category)
-      );
+      return await apiClient.get(API_ENDPOINTS.PRODUCTS_BY_CATEGORY(category));
     } catch (error) {
       console.error(`Error fetching products for category ${category}:`, error);
       throw error;
+    }
+  }
+
+  async getProductsBySaleType(saleType) {
+    try {
+      return await apiClient.get(API_ENDPOINTS.PRODUCTS_BY_SALE(saleType));
+    } catch (error) {
+      // Silently handle sale type errors to avoid console spam
+      // Return empty array instead of throwing
+      return [];
     }
   }
 
@@ -53,10 +62,7 @@ class ProductService {
 
   async updateProduct(id, product) {
     try {
-      return await apiClient.put(
-        API_ENDPOINTS.PRODUCT_BY_ID(id),
-        product
-      );
+      return await apiClient.put(API_ENDPOINTS.PRODUCT_BY_ID(id), product);
     } catch (error) {
       console.error(`Error updating product ${id}:`, error);
       throw error;
@@ -65,9 +71,7 @@ class ProductService {
 
   async updateProductStock(id, quantity) {
     try {
-      return await apiClient.patch(
-        API_ENDPOINTS.UPDATE_STOCK(id, quantity)
-      );
+      return await apiClient.patch(API_ENDPOINTS.UPDATE_STOCK(id, quantity));
     } catch (error) {
       console.error(`Error updating product stock ${id}:`, error);
       throw error;
@@ -81,6 +85,17 @@ class ProductService {
       console.error(`Error deleting product ${id}:`, error);
       throw error;
     }
+  }
+
+  /**
+   * Get product image URL
+   * @param {string} imagePath
+   * @returns {string}
+   */
+  getImageUrl(imagePath) {
+    if (!imagePath) return null;
+    const { API_CONFIG } = require('../config/api.config');
+    return `${API_CONFIG.BASE_URL}${API_ENDPOINTS.PRODUCT_IMAGE(imagePath)}`;
   }
 }
 

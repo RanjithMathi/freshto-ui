@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useAddress } from '../context/AddressContext';
+import { useAuth } from '../context/AuthContext';
 
 const AddressSelectionScreen = ({ navigation, route }) => {
   const { customerId } = route.params || {};
@@ -25,13 +26,34 @@ const AddressSelectionScreen = ({ navigation, route }) => {
     getAddressTypeDisplay,
     getFullAddressString,
   } = useAddress();
+  const { isLoggedIn, user } = useAuth();
 
   const [selectedAddressId, setSelectedAddressId] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
+    // Check authentication
+    if (!isLoggedIn || !user) {
+      Alert.alert(
+        'Login Required',
+        'Please login with your mobile number to select a delivery address.',
+        [
+          {
+            text: 'Cancel',
+            onPress: () => navigation.goBack()
+          },
+          {
+            text: 'Login',
+            onPress: () => navigation.navigate('Cart') // Navigate to cart where auth modal is available
+          }
+        ]
+      );
+      return;
+    }
+
+    // If user is logged in, load their addresses
     loadAddresses();
-  }, []);
+  }, [isLoggedIn, user, navigation]);
 
   useEffect(() => {
     if (defaultAddress) {
@@ -103,6 +125,7 @@ const AddressSelectionScreen = ({ navigation, route }) => {
     }
 
     if (selected) {
+      // Use the customerId from context/state instead of calling useAuth here
       navigation.navigate('TimeSlotSelection', { address: selected, customerId: customerId });
     }
     // navigation.goBack();

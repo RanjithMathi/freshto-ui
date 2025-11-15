@@ -1,3 +1,6 @@
+// ========================================
+// src/navigation/AppNavigator.js - COMPLETE FIX
+// ========================================
 import React from 'react';
 import {NavigationContainer} from '@react-navigation/native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
@@ -12,7 +15,6 @@ import FavoritesScreen from '../screens/FavoritesScreen';
 import CategoriesScreen from '../screens/CategoriesScreen';
 import CartScreen from '../screens/CartScreen';
 import AccountScreen from '../screens/AccountScreen';
-import AdminDashboard from '../screens/AdminDashboard';
 
 // Checkout Flow Screens
 import AddressSelectionScreen from '../screens/AddressSelectionScreen';
@@ -21,6 +23,8 @@ import TimeSlotSelectionScreen from '../screens/TimeSlotSelectionScreen';
 import OrderSummaryScreen from '../screens/OrderSummaryScreen';
 import OrderSuccessScreen from '../screens/OrderSuccessScreen';
 import OrderTrackingScreen from '../screens/OrderTrackingScreen';
+import EditProfileScreen from '../screens/EditProfileScreen';
+import OrderHistoryScreen from '../screens/OrderHistoryScreen';
 
 import { useCart } from '../context/CartContext';
 
@@ -28,7 +32,7 @@ const Tab = createBottomTabNavigator();
 const HomeStack = createNativeStackNavigator();
 const CategoriesStack = createNativeStackNavigator();
 const CartStack = createNativeStackNavigator();
-const AdminStack = createNativeStackNavigator();
+const AccountStack = createNativeStackNavigator(); // ✅ NEW: Account Stack
 
 // Home Stack Navigator
 const HomeStackNavigator = () => {
@@ -100,44 +104,44 @@ const CartStackNavigator = () => {
       }}
     >
       <CartStack.Screen name="CartMain" component={CartScreen} />
-      <CartStack.Screen 
-        name="AddressSelection" 
+      <CartStack.Screen
+        name="AddressSelection"
         component={AddressSelectionScreen}
         options={{
           animation: 'slide_from_right',
         }}
       />
-      <CartStack.Screen 
-        name="AddEditAddress" 
+      <CartStack.Screen
+        name="AddEditAddress"
         component={AddEditAddressScreen}
         options={{
           animation: 'slide_from_right',
         }}
       />
-      <CartStack.Screen 
-        name="TimeSlotSelection" 
+      <CartStack.Screen
+        name="TimeSlotSelection"
         component={TimeSlotSelectionScreen}
         options={{
           animation: 'slide_from_right',
         }}
       />
-      <CartStack.Screen 
-        name="OrderSummary" 
+      <CartStack.Screen
+        name="OrderSummary"
         component={OrderSummaryScreen}
         options={{
           animation: 'slide_from_right',
         }}
       />
-      <CartStack.Screen 
-        name="OrderSuccess" 
+      <CartStack.Screen
+        name="OrderSuccess"
         component={OrderSuccessScreen}
         options={{
           animation: 'slide_from_bottom',
           gestureEnabled: false,
         }}
       />
-      <CartStack.Screen 
-        name="OrderTracking" 
+      <CartStack.Screen
+        name="OrderTracking"
         component={OrderTrackingScreen}
         options={{
           animation: 'slide_from_right',
@@ -147,18 +151,54 @@ const CartStackNavigator = () => {
   );
 };
 
-// Admin Stack Navigator
-const AdminStackNavigator = () => {
+// ✅ NEW: Account Stack Navigator - includes profile management
+const AccountStackNavigator = () => {
   return (
-    <AdminStack.Navigator
+    <AccountStack.Navigator
       screenOptions={{
         headerShown: false,
       }}
     >
-      <AdminStack.Screen name="AdminMain" component={AdminDashboard} />
-    </AdminStack.Navigator>
+      <AccountStack.Screen name="AccountMain" component={AccountScreen} />
+      <AccountStack.Screen
+        name="EditProfile"
+        component={EditProfileScreen}
+        options={{
+          animation: 'slide_from_right',
+        }}
+      />
+      <AccountStack.Screen
+        name="AddressManagement"
+        component={AddressSelectionScreen}
+        options={{
+          animation: 'slide_from_right',
+        }}
+      />
+      <AccountStack.Screen
+        name="AddEditAddress"
+        component={AddEditAddressScreen}
+        options={{
+          animation: 'slide_from_right',
+        }}
+      />
+      <AccountStack.Screen
+        name="OrderHistory"
+        component={OrderHistoryScreen}
+        options={{
+          animation: 'slide_from_right',
+        }}
+      />
+      <AccountStack.Screen
+        name="OrderTracking"
+        component={OrderTrackingScreen}
+        options={{
+          animation: 'slide_from_right',
+        }}
+      />
+    </AccountStack.Navigator>
   );
 };
+
 
 // Tab Navigator Component
 const TabNavigator = () => {
@@ -180,8 +220,6 @@ const TabNavigator = () => {
             iconName = 'shopping-cart';
           } else if (route.name === 'Account') {
             iconName = 'person';
-          } else if (route.name === 'Admin') {
-            iconName = 'admin-panel-settings';
           }
 
           return <Icon name={iconName} size={size} color={color} />;
@@ -201,11 +239,14 @@ const TabNavigator = () => {
               'ProductDetailScreen',
               'CategoryProducts',
               'AddressSelection',
+              'AddressManagement', // ✅ Added
               'AddEditAddress',
               'TimeSlotSelection',
               'OrderSummary',
               'OrderSuccess',
               'OrderTracking',
+              'EditProfile',
+              'OrderHistory',
             ];
             
             if (hideTabBarScreens.includes(nestedRoute.name)) {
@@ -263,18 +304,8 @@ const TabNavigator = () => {
       />
       <Tab.Screen 
         name="Account" 
-        component={AccountScreen}
+        component={AccountStackNavigator} // ✅ Changed from single screen to stack
         options={{title: 'Account'}}
-      />
-      <Tab.Screen 
-        name="Admin" 
-        component={AdminStackNavigator}
-        options={{
-          title: 'Admin',
-          tabBarIcon: ({focused, color, size}) => (
-            <Icon name="admin-panel-settings" size={size} color={color} />
-          ),
-        }}
       />
     </Tab.Navigator>
   );

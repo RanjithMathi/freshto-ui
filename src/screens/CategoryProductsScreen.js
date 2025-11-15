@@ -1,3 +1,6 @@
+// ========================================
+// src/screens/CategoryProductsScreen.js
+// ========================================
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -12,16 +15,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import ProductCard from '../components/ProductCard';
-
-// Import fallback images
+import productService from '../services/productService';
+import { formatProductForDisplay } from '../utils/imageHelper';
 import product1 from '../assets/images/careo-5.jpg';
-
-const API_BASE_URL = 'http://192.168.0.127:8080';
 
 const categories = ['All Categories', 'Chicken', 'Country Chicken', 'Egg'];
 
 const CategoryProductsScreen = ({ route, navigation }) => {
-  // Get initial category from navigation params
   const initialCategory = route?.params?.category || 'All Categories';
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
   const [dropdownVisible, setDropdownVisible] = useState(false);
@@ -36,32 +36,18 @@ const CategoryProductsScreen = ({ route, navigation }) => {
   const fetchProductsByCategory = async (category) => {
     try {
       setLoading(true);
-      let url;
+      let data;
 
       if (category === 'All Categories') {
-        // Fetch all available products
-        url = `${API_BASE_URL}/api/products/available`;
+        data = await productService.getAvailableProducts();
       } else {
-        // Fetch products by specific category
-        url = `${API_BASE_URL}/api/products/category/${encodeURIComponent(category)}`;
+        data = await productService.getProductsByCategory(category);
       }
-
-      const response = await fetch(url);
-      const data = await response.json();
       
       // Format products for display
-      const formattedProducts = data.map((product) => ({
-        id: product.id?.toString(),
-        title: product.name,
-        price: `₹${product.price}`,
-        originalPrice: product.originalPrice ? `₹${product.originalPrice}` : null,
-        discount: product.discountPercentage ? `${product.discountPercentage}% OFF` : null,
-        image: product.imagePath 
-          ? { uri: `${API_BASE_URL}/api/products/images/${product.imagePath}` }
-          : product1, // fallback image
-        category: product.category,
-        product: product, // Keep original product data
-      }));
+      const formattedProducts = data.map((product) => 
+        formatProductForDisplay(product, product1)
+      );
 
       setProducts(formattedProducts);
     } catch (error) {
@@ -77,7 +63,6 @@ const CategoryProductsScreen = ({ route, navigation }) => {
     setDropdownVisible(false);
   };
 
-  // Navigate to product details
   const handleProductPress = (productData) => {
     navigation.navigate('ProductDetailScreen', {
       product: productData,
@@ -186,7 +171,6 @@ const CategoryProductsScreen = ({ route, navigation }) => {
                   discount={product.discount}
                   product={product.product}
                   onPress={() => handleProductPress(product)}
-                  onAdd={() => console.log(`Added ${product.title}`)}
                 />
               ))}
             </View>

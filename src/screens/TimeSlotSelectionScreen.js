@@ -10,21 +10,46 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useOrder } from '../context/OrderContext';
+import { useAuth } from '../context/AuthContext';
 
 const TimeSlotSelectionScreen = ({ navigation, route }) => {
-   const { address,customerId } = route.params || {};
+  const { address, customerId } = route.params || {};
   const { selectDeliverySlot } = useOrder();
+  const { isLoggedIn, user } = useAuth();
   
   const [selectedDate, setSelectedDate] = useState('today');
   const [selectedSlot, setSelectedSlot] = useState(null);
 
-  const timeSlots = [
-    { id: '1', time: '6:00 AM - 9:00 AM', label: 'Early Morning', available: true },
-    { id: '2', time: '9:00 AM - 12:00 PM', label: 'Morning', available: true },
-    { id: '3', time: '12:00 PM - 3:00 PM', label: 'Afternoon', available: true },
-    { id: '4', time: '3:00 PM - 6:00 PM', label: 'Evening', available: false },
-    { id: '5', time: '6:00 PM - 9:00 PM', label: 'Night', available: true },
+  const allTimeSlots = [
+    { id: '1', time: '6:00 AM - 9:00 AM', label: 'Early Morning', endHour: 9 },
+    { id: '2', time: '9:00 AM - 12:00 PM', label: 'Morning', endHour: 12 },
+    { id: '3', time: '12:00 PM - 3:00 PM', label: 'Afternoon', endHour: 15 },
+    { id: '4', time: '3:00 PM - 6:00 PM', label: 'Evening', endHour: 18 },
+    { id: '5', time: '6:00 PM - 9:00 PM', label: 'Night', endHour: 21 },
   ];
+
+  // Function to check if a time slot is available based on current time
+  const isSlotAvailable = (slot) => {
+    if (selectedDate !== 'today') {
+      return true; // All slots available for tomorrow
+    }
+
+    const now = new Date();
+    const currentHour = now.getHours();
+    
+    // Slot is available if its end time hasn't passed yet
+    return slot.endHour > currentHour;
+  };
+
+  // Get filtered time slots based on selected date
+  const getAvailableTimeSlots = () => {
+    return allTimeSlots.map(slot => ({
+      ...slot,
+      available: isSlotAvailable(slot)
+    }));
+  };
+
+  const timeSlots = getAvailableTimeSlots();
 
   const getDateDisplay = () => {
     const today = new Date();
@@ -40,6 +65,25 @@ const TimeSlotSelectionScreen = ({ navigation, route }) => {
   };
 
   const handleContinue = () => {
+    // Check authentication
+    if (!isLoggedIn || !user) {
+      Alert.alert(
+        'Login Required',
+        'Please login with your mobile number to select a delivery time.',
+        [
+          {
+            text: 'Cancel',
+            onPress: () => navigation.goBack()
+          },
+          {
+            text: 'Login',
+            onPress: () => navigation.navigate('Cart') // Navigate to cart where auth modal is available
+          }
+        ]
+      );
+      return;
+    }
+
     if (!selectedSlot) {
       Alert.alert('No Time Slot Selected', 'Please select a delivery time slot');
       return;
@@ -52,9 +96,19 @@ const TimeSlotSelectionScreen = ({ navigation, route }) => {
     };
 
     selectDeliverySlot(deliverySlot);
-    console.log("address route",address);
-    console.log("time slot screen:",customerId);
-    navigation.navigate('OrderSummary', { address: address ,customerId: customerId });
+    console.log("address route", address);
+    console.log("time slot screen:", customerId);
+    // Pass the authenticated user ID instead of route param
+    const custId = user?.userId || user?.id || customerId;
+    navigation.navigate('OrderSummary', { address: address, customerId: custId });
+  };
+
+  const handleDateChange = (dateType) => {
+    setSelectedDate(dateType);
+    // Clear selected slot when changing date if it's no longer available
+    if (selectedSlot && dateType === 'today' && !isSlotAvailable(selectedSlot)) {
+      setSelectedSlot(null);
+    }
   };
 
   const renderDateButton = (dateType, label) => {
@@ -62,7 +116,7 @@ const TimeSlotSelectionScreen = ({ navigation, route }) => {
     return (
       <TouchableOpacity
         style={[styles.dateButton, isSelected && styles.dateButtonSelected]}
-        onPress={() => setSelectedDate(dateType)}
+        onPress={() => handleDateChange(dateType)}
         activeOpacity={0.7}
       >
         <Text style={[styles.dateButtonText, isSelected && styles.dateButtonTextSelected]}>
@@ -107,7 +161,7 @@ const TimeSlotSelectionScreen = ({ navigation, route }) => {
 
           {!isAvailable && (
             <View style={styles.unavailableBadge}>
-              <Text style={styles.unavailableText}>Not Available</Text>
+              <Text style={styles.unavailableText}>Passed</Text>
             </View>
           )}
 
@@ -118,6 +172,9 @@ const TimeSlotSelectionScreen = ({ navigation, route }) => {
       </TouchableOpacity>
     );
   };
+
+  // Check if there are any available slots
+  const hasAvailableSlots = timeSlots.some(slot => slot.available);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -148,6 +205,16 @@ const TimeSlotSelectionScreen = ({ navigation, route }) => {
         {/* Time Slot Selection */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Select Time Slot</Text>
+          
+          {!hasAvailableSlots && selectedDate === 'today' && (
+            <View style={styles.noSlotsCard}>
+              <Icon name="schedule" size={24} color="#ff6b6b" />
+              <Text style={styles.noSlotsText}>
+                No time slots available for today. Please select tomorrow.
+              </Text>
+            </View>
+          )}
+          
           {timeSlots.map((slot) => renderTimeSlot(slot))}
         </View>
 
@@ -254,6 +321,23 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontWeight: '500',
   },
+  noSlotsCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff3f3',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#ff6b6b',
+  },
+  noSlotsText: {
+    fontSize: 14,
+    color: '#ff6b6b',
+    marginLeft: 12,
+    flex: 1,
+    lineHeight: 20,
+  },
   slotCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
@@ -298,7 +382,7 @@ const styles = StyleSheet.create({
     color: '#999',
   },
   unavailableBadge: {
-    backgroundColor: '#ff4444',
+    backgroundColor: '#ff6b6b',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 4,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,25 +7,72 @@ import {
   ScrollView,
   Image,
   Linking,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useOrder } from '../context/OrderContext';
+import { useAuth } from '../context/AuthContext';
+import orderService from '../services/orderService';
+import productService from '../services/productService';
 
 const OrderTrackingScreen = ({ navigation, route }) => {
   const { orderId } = route.params;
   const { getOrderById } = useOrder();
-  const order = getOrderById(orderId);
+  const { isLoggedIn, user } = useAuth();
+
+  // Order data from API
+  const [order, setOrder] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   // Track status progression
-  const [currentStatus, setCurrentStatus] = useState('preparing'); // confirmed, preparing, out_for_delivery, delivered
+  const [currentStatus, setCurrentStatus] = useState('confirmed'); // confirmed, preparing, out_for_delivery, delivered
+
+  // Fetch order data from API
+  useEffect(() => {
+    fetchOrderDetails();
+  }, [orderId]);
+
+  const fetchOrderDetails = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      console.log('Fetching order details for ID:', orderId);
+      const orderData = await orderService.getOrderById(orderId);
+      console.log('Order data received:', orderData);
+
+      setOrder(orderData);
+
+      // Set current status based on order status from API
+      const statusMapping = {
+        'PENDING': 'confirmed',
+        'CONFIRMED': 'confirmed',
+        'PROCESSING': 'preparing',
+        'OUT_FOR_DELIVERY': 'out_for_delivery',
+        'DELIVERED': 'delivered',
+        'CANCELLED': 'cancelled'
+      };
+
+      setCurrentStatus(statusMapping[orderData.status] || 'confirmed');
+
+    } catch (error) {
+      console.error('Error fetching order details:', error);
+      setError('Failed to load order details. Please try again.');
+      Alert.alert('Error', 'Failed to load order details');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const trackingSteps = [
     {
       id: 'confirmed',
       label: 'Order Confirmed',
       icon: 'check-circle',
-      time: order?.createdAt ? new Date(order.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '',
+      time: order?.orderDate ? new Date(order.orderDate).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '',
     },
     {
       id: 'preparing',
@@ -118,6 +165,36 @@ const OrderTrackingScreen = ({ navigation, route }) => {
     );
   };
 
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#0b8a0b" />
+          <Text style={styles.loadingText}>Loading order details...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error || !order) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Icon name="error-outline" size={60} color="#ff6b6b" />
+          <Text style={styles.errorTitle}>Unable to Load Order</Text>
+          <Text style={styles.errorText}>{error || 'Order not found'}</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={fetchOrderDetails}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
@@ -142,7 +219,7 @@ const OrderTrackingScreen = ({ navigation, route }) => {
             <Icon name="schedule" size={24} color="#0b8a0b" />
             <View style={styles.deliveryInfo}>
               <Text style={styles.deliveryLabel}>Estimated Delivery</Text>
-              <Text style={styles.deliveryTime}>{order?.deliverySlot?.time}</Text>
+              <Text style={styles.deliveryTime}>{order?.deliverySlot || 'As per schedule'}</Text>
             </View>
           </View>
         </View>
@@ -190,33 +267,48 @@ const OrderTrackingScreen = ({ navigation, route }) => {
             <Text style={styles.addressTitle}>Delivery Address</Text>
           </View>
           <View style={styles.addressContent}>
-            <Text style={styles.addressType}>{order?.address?.type}</Text>
-            <Text style={styles.addressName}>{order?.address?.name}</Text>
+            <Text style={styles.addressType}>{order?.address?.addressType || 'HOME'}</Text>
+            <Text style={styles.addressName}>{order?.deliveryAddressLine1}</Text>
             <Text style={styles.addressDetail}>
-              {order?.address?.houseNo}, {order?.address?.area}
+              {order?.deliveryAddressLine2}
             </Text>
+            {order?.deliveryLandmark && (
+              <Text style={styles.addressDetail}>
+                Landmark: {order?.deliveryLandmark}
+              </Text>
+            )}
             <Text style={styles.addressDetail}>
-              {order?.address?.city}, {order?.address?.state} - {order?.address?.pincode}
+              {order?.deliveryCity}, {order?.deliveryState} - {order?.deliveryZipCode}
             </Text>
-            <Text style={styles.addressPhone}>{order?.address?.phone}</Text>
+            <Text style={styles.addressPhone}>{order?.deliveryContactPhone}</Text>
           </View>
         </View>
 
         {/* Order Items */}
         <View style={styles.itemsCard}>
-          <Text style={styles.itemsTitle}>Order Items ({order?.items?.length})</Text>
-          {order?.items?.map((item, index) => (
-            <View key={index} style={styles.orderItem}>
-              <Image source={item.image} style={styles.itemImage} />
-              <View style={styles.itemDetails}>
-                <Text style={styles.itemTitle} numberOfLines={2}>
-                  {item.title}
-                </Text>
-                <Text style={styles.itemQuantity}>Qty: {item.quantity}</Text>
+          <Text style={styles.itemsTitle}>Order Items ({order?.orderItems?.length || 0})</Text>
+          {order?.orderItems?.map((item, index) => {
+            const imageUri = item.productImage
+              ? productService.getImageUrl(item.productImage)
+              : null;
+
+            return (
+              <View key={item.id || index} style={styles.orderItem}>
+                <Image
+                  source={imageUri ? { uri: imageUri } : require('../assets/images/careo-5.jpg')}
+                  style={styles.itemImage}
+                  resizeMode="cover"
+                />
+                <View style={styles.itemDetails}>
+                  <Text style={styles.itemTitle} numberOfLines={2}>
+                    {item.productName}
+                  </Text>
+                  <Text style={styles.itemQuantity}>Qty: {item.quantity}</Text>
+                </View>
+                <Text style={styles.itemPrice}>₹{item.price}</Text>
               </View>
-              <Text style={styles.itemPrice}>{item.price}</Text>
-            </View>
-          ))}
+            );
+          })}
         </View>
 
         {/* Payment Info */}
@@ -224,13 +316,15 @@ const OrderTrackingScreen = ({ navigation, route }) => {
           <View style={styles.paymentRow}>
             <Text style={styles.paymentLabel}>Payment Method</Text>
             <Text style={styles.paymentValue}>
-              {order?.paymentMethod === 'cod' ? 'Cash on Delivery' : 
-               order?.paymentMethod === 'upi' ? 'UPI' : 'Card'}
+              {order?.paymentMethod === 'COD' ? 'Cash on Delivery' :
+               order?.paymentMethod === 'UPI' ? 'UPI' :
+               order?.paymentMethod === 'CARD' ? 'Credit/Debit Card' :
+               order?.paymentMethod || 'Cash on Delivery'}
             </Text>
           </View>
           <View style={styles.paymentRow}>
             <Text style={styles.totalLabel}>Total Amount</Text>
-            <Text style={styles.totalValue}>₹{order?.total}</Text>
+            <Text style={styles.totalValue}>₹{order?.totalAmount}</Text>
           </View>
         </View>
 
@@ -595,6 +689,46 @@ const styles = StyleSheet.create({
   helpText: {
     fontSize: 13,
     color: '#666',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#666',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  retryButton: {
+    backgroundColor: '#0b8a0b',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 

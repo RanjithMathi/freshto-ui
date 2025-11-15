@@ -1,9 +1,11 @@
+// src/components/ProductCard.js
 import React from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useCart } from '../context/CartContext';
+import { parsePrice, formatPrice } from '../utils/imageHelper';
 
-const ProductCard = ({ image, title, price, originalPrice, discount, product, onPress }) => {
+const ProductCard = ({ image, title, price, originalPrice, discount, product, onPress, isHorizontal = false }) => {
   const { cartItems, addToCart, updateQuantity } = useCart();
 
   // Check if product is in cart and get its quantity
@@ -15,10 +17,13 @@ const ProductCard = ({ image, title, price, originalPrice, discount, product, on
   const handleAdd = (e) => {
     e.stopPropagation();
     
+    // Ensure price is a number
+    const numericPrice = parsePrice(price);
+    
     const cartProduct = {
       id: product.id,
       title: title,
-      price: typeof price === 'string' ? parseFloat(price.replace('₹', '').trim()) : price,
+      price: numericPrice,
       image: image,
       originalPrice: originalPrice,
       discount: discount,
@@ -44,10 +49,17 @@ const ProductCard = ({ image, title, price, originalPrice, discount, product, on
     }
   };
 
+  // Format price for display
+  const displayPrice = typeof price === 'number' ? formatPrice(price) : price;
+
+  // Use different styles for horizontal layout
+  const cardStyle = isHorizontal ? styles.horizontalCard : styles.card;
+  const imageStyle = isHorizontal ? styles.horizontalImage : styles.image;
+
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
+    <TouchableOpacity style={cardStyle} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.imageContainer}>
-        <Image source={image} style={styles.image} resizeMode="cover" />
+        <Image source={image} style={imageStyle} resizeMode="cover" />
         {discount && (
           <View style={styles.discountBadge}>
             <Text style={styles.discountText}>{discount}</Text>
@@ -60,7 +72,7 @@ const ProductCard = ({ image, title, price, originalPrice, discount, product, on
         
         <View style={styles.priceRow}>
           <View style={styles.priceContainer}>
-            <Text style={styles.price}>{price}</Text>
+            <Text style={styles.price}>{displayPrice}</Text>
             {originalPrice && (
               <Text style={styles.originalPrice}>{originalPrice}</Text>
             )}
@@ -115,12 +127,28 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     overflow: 'hidden',
   },
+  horizontalCard: {
+    width: '100%',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    overflow: 'hidden',
+  },
   imageContainer: {
     position: 'relative',
   },
   image: {
     width: '100%',
     height: 140,
+    backgroundColor: '#f5f5f5',
+  },
+  horizontalImage: {
+    width: '100%',
+    height: 120,
     backgroundColor: '#f5f5f5',
   },
   discountBadge: {
