@@ -12,8 +12,9 @@ import {
   StatusBar,
   TouchableOpacity,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import CircleMenu from '../components/CircleMenu';
 import ProductCard from '../components/ProductCard';
 import Icon from 'react-native-vector-icons/MaterialIcons';
@@ -48,6 +49,7 @@ const HEADER_TOP_HEIGHT = 60;
 const SEARCH_BAR_HEIGHT = 50;
 
 const HomeScreen = ({ navigation }) => {
+  const insets = useSafeAreaInsets();
   const flatListRef = useRef(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [searchText, setSearchText] = useState('');
@@ -141,22 +143,34 @@ const HomeScreen = ({ navigation }) => {
     });
   };
 
-  // Animate header
+  // Fresh to Home style animations - smooth and professional
   const headerTranslateY = scrollY.interpolate({
-    inputRange: [0, HEADER_TOP_HEIGHT],
-    outputRange: [0, -HEADER_TOP_HEIGHT],
+    inputRange: [0, HEADER_TOP_HEIGHT + 30], // Extra 30px for smoother transition
+    outputRange: [0, -(HEADER_TOP_HEIGHT + 30)],
     extrapolate: 'clamp',
   });
 
   const headerOpacity = scrollY.interpolate({
-    inputRange: [0, HEADER_TOP_HEIGHT / 2, HEADER_TOP_HEIGHT],
-    outputRange: [1, 0.5, 0],
+    inputRange: [0, HEADER_TOP_HEIGHT - 10, HEADER_TOP_HEIGHT],
+    outputRange: [1, 0.5, 0], // Gradual fade for smoother transition
     extrapolate: 'clamp',
   });
 
   const searchBarTranslateY = scrollY.interpolate({
     inputRange: [0, HEADER_TOP_HEIGHT],
-    outputRange: [HEADER_TOP_HEIGHT, 0],
+    outputRange: [0, -HEADER_TOP_HEIGHT - 5], // Proper spacing from status bar
+    extrapolate: 'clamp',
+  });
+
+  const searchBarBackgroundOpacity = scrollY.interpolate({
+    inputRange: [0, HEADER_TOP_HEIGHT - 10, HEADER_TOP_HEIGHT],
+    outputRange: [1, 0.7, 0.1], // Subtle fade, not completely transparent
+    extrapolate: 'clamp',
+  });
+
+  const searchBarScale = scrollY.interpolate({
+    inputRange: [0, HEADER_TOP_HEIGHT],
+    outputRange: [1, 0.95], // Slight scale down for premium feel
     extrapolate: 'clamp',
   });
 
@@ -194,58 +208,72 @@ const HomeScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar backgroundColor="#0b8a0b" barStyle="light-content" />
-      <SafeAreaView style={styles.statusBarBackground} />
+      <StatusBar 
+        backgroundColor="#0b8a0b" 
+        barStyle="light-content" 
+        translucent={false}
+      />
 
-      {/* Animated Top Header */}
-      <Animated.View
-        style={[
-          styles.headerTopRow,
-          {
-            transform: [{ translateY: headerTranslateY }],
-            opacity: headerOpacity,
-          },
-        ]}
-      >
-        <TouchableOpacity style={styles.locationContainer}>
-          <Icon name="location-on" size={20} color="#fff" />
-          <View style={styles.locationTextContainer}>
-            <Text style={styles.pincodeText}>637001</Text>
-            <Text style={styles.addressText} numberOfLines={1}>
-              Namakkal, Tamil Nadu
-            </Text>
-          </View>
-        </TouchableOpacity>
+      {/* Fixed Header Container */}
+      <View style={[styles.headerContainer, { paddingTop: insets.top }]}>
+        {/* Top Header with Location and Logo - This slides up and hides */}
+        <Animated.View
+          style={[
+            styles.headerTopRow,
+            {
+              transform: [{ translateY: headerTranslateY }],
+              opacity: headerOpacity,
+            },
+          ]}
+        >
+          <TouchableOpacity style={styles.locationContainer}>
+            <Icon name="location-on" size={20} color="#fff" />
+            <View style={styles.locationTextContainer}>
+              <Text style={styles.pincodeText}>637001</Text>
+              <Text style={styles.addressText} numberOfLines={1}>
+                Namakkal, Tamil Nadu
+              </Text>
+            </View>
+          </TouchableOpacity>
 
-        <Image source={require('../assets/images/logo.png')} style={styles.logoImage} />
-      </Animated.View>
+          <Image source={require('../assets/images/logo.png')} style={styles.logoImage} />
+        </Animated.View>
 
-      {/* Search bar */}
-      <Animated.View
-        style={[
-          styles.searchBarContainer,
-          {
-            transform: [{ translateY: searchBarTranslateY }],
-          },
-        ]}
-      >
-        <TextInput
-          value={searchText}
-          onChangeText={setSearchText}
-          placeholder="Search products..."
-          placeholderTextColor="#888"
-          style={styles.searchInput}
-        />
-      </Animated.View>
+        {/* Search bar - Fresh to Home style with subtle background and scaling */}
+        <Animated.View 
+          style={[
+            styles.searchBarContainer,
+            {
+              transform: [
+                { translateY: searchBarTranslateY },
+                { scale: searchBarScale },
+              ],
+              backgroundColor: searchBarBackgroundOpacity.interpolate({
+                inputRange: [0, 0.7, 1],
+                outputRange: ['#0b8a0b', 'rgba(11, 138, 11, 0.7)', 'transparent'],
+                extrapolate: 'clamp',
+              }),
+            },
+          ]}
+        >
+          <TextInput
+            value={searchText}
+            onChangeText={setSearchText}
+            placeholder="Search products..."
+            placeholderTextColor="#888"
+            style={styles.searchInput}
+          />
+        </Animated.View>
+      </View>
 
       {/* Scrollable content */}
       <Animated.ScrollView
         style={styles.contentContainer}
-        contentContainerStyle={{
-          paddingBottom: 24,
-          paddingTop: HEADER_TOP_HEIGHT + SEARCH_BAR_HEIGHT,
-        }}
-        scrollEventThrottle={16}
+        contentContainerStyle={[
+          styles.scrollContentContainer,
+          { paddingTop: 16 } // Reduced padding since search bar moves up
+        ]}
+        scrollEventThrottle={8} // Higher frequency for smoother animations like Fresh to Home
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: true }
@@ -362,22 +390,23 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'white',
   },
-  statusBarBackground: {
+  headerContainer: {
     backgroundColor: '#0b8a0b',
+    zIndex: 1000,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    overflow: 'hidden', // Important: clips the sliding header
   },
   headerTopRow: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
     height: HEADER_TOP_HEIGHT,
     backgroundColor: '#0b8a0b',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    zIndex: 10,
-    elevation: 5,
   },
   locationContainer: {
     flexDirection: 'row',
@@ -412,15 +441,11 @@ const styles = StyleSheet.create({
     borderColor: '#dd7805ff',
   },
   searchBarContainer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
     height: SEARCH_BAR_HEIGHT,
     backgroundColor: '#0b8a0b',
     justifyContent: 'center',
     paddingHorizontal: 16,
-    zIndex: 11,
-    elevation: 6,
+    paddingBottom: 8,
   },
   searchInput: {
     backgroundColor: '#fff',
@@ -434,8 +459,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'white',
   },
+  scrollContentContainer: {
+    paddingBottom: 24,
+  },
   carouselContainer: {
-    paddingTop: 16,
     paddingLeft: 16,
   },
   bannerImage: {

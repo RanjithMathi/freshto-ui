@@ -5,13 +5,13 @@ import { API_ENDPOINTS, API_CONFIG } from '../config/api.config';
 
 class AuthService {
   /**
-   * Send OTP to phone number
+   * Login with phone number only
    * @param {string} phoneNumber - 10 digit phone number
-   * @returns {Promise<{success: boolean, message: string, data?: any}>}
+   * @returns {Promise<{success: boolean, message: string, user?: UserDto, token?: string, hasAddresses?: boolean}>}
    */
-  async sendOtp(phoneNumber) {
+  async login(phoneNumber) {
     try {
-      console.log('📤 Sending OTP to:', phoneNumber);
+      console.log('🔐 Logging in with phone number:', phoneNumber);
       
       // Validate phone number format
       if (!this.validatePhoneNumber(phoneNumber)) {
@@ -21,75 +21,16 @@ class AuthService {
         };
       }
 
-      const url = API_CONFIG.BASE_URL + API_ENDPOINTS.AUTH.SEND_OTP;
-      console.log('🌐 Send OTP URL:', url);
+      const url = API_CONFIG.BASE_URL + API_ENDPOINTS.AUTH.LOGIN;
+      console.log('🌐 Login URL:', url);
 
       const response = await apiClient.post(
-        API_ENDPOINTS.AUTH.SEND_OTP,
+        API_ENDPOINTS.AUTH.LOGIN,
         { phoneNumber: phoneNumber.trim() },
         { headers: { 'Content-Type': 'application/json' } }
       );
 
-      console.log('✅ Send OTP response:', response);
-
-      if (response.success) {
-        return {
-          success: true,
-          message: response.message || 'OTP sent successfully',
-          data: response,
-        };
-      } else {
-        return {
-          success: false,
-          message: response.message || 'Failed to send OTP',
-        };
-      }
-    } catch (error) {
-      console.error('❌ SendOTP Error:', error);
-      return {
-        success: false,
-        message: error.message || 'Failed to send OTP. Please try again.',
-      };
-    }
-  }
-
-  /**
-   * Verify OTP and login
-   * @param {string} phoneNumber - 10 digit phone number
-   * @param {string} otp - 6 digit OTP
-   * @returns {Promise<{success: boolean, message: string, user?: UserDto, token?: string, hasAddresses?: boolean}>}
-   */
-  async verifyOtp(phoneNumber, otp) {
-    try {
-      console.log('🔐 Verifying OTP for:', phoneNumber);
-      
-      // Validate inputs
-      if (!this.validatePhoneNumber(phoneNumber)) {
-        return {
-          success: false,
-          message: 'Invalid phone number format',
-        };
-      }
-
-      if (!this.validateOtp(otp)) {
-        return {
-          success: false,
-          message: 'Invalid OTP format. Please enter 6 digits.',
-        };
-      }
-
-      const url = API_CONFIG.BASE_URL + API_ENDPOINTS.AUTH.VERIFY_OTP;
-      console.log('🌐 Verify OTP URL:', url);
-
-      const response = await apiClient.post(
-        API_ENDPOINTS.AUTH.VERIFY_OTP,
-        {
-          phoneNumber: phoneNumber.trim(),
-          otp: otp.trim(),
-        }
-      );
-
-      console.log('✅ Verify OTP response:', response);
+      console.log('✅ Login response:', response);
 
       if (response.success) {
         // ✅ Store token if provided
@@ -126,14 +67,14 @@ class AuthService {
       } else {
         return {
           success: false,
-          message: response.message || 'Invalid OTP',
+          message: response.message || 'Login failed',
         };
       }
     } catch (error) {
-      console.error('❌ VerifyOTP Error:', error);
+      console.error('❌ Login Error:', error);
       return {
         success: false,
-        message: error.message || 'Failed to verify OTP. Please try again.',
+        message: error.message || 'Failed to login. Please try again.',
       };
     }
   }
@@ -222,21 +163,6 @@ class AuthService {
     const isValid = phoneRegex.test(phoneNumber.trim());
     if (!isValid) {
       console.warn('⚠️ Invalid phone number format:', phoneNumber);
-    }
-    return isValid;
-  }
-
-  /**
-   * Validate OTP (6 digits)
-   * @param {string} otp
-   * @returns {boolean}
-   */
-  validateOtp(otp) {
-    if (!otp) return false;
-    const otpRegex = /^\d{6}$/;
-    const isValid = otpRegex.test(otp.trim());
-    if (!isValid) {
-      console.warn('⚠️ Invalid OTP format:', otp);
     }
     return isValid;
   }

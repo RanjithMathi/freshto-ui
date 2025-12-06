@@ -15,7 +15,7 @@ import { useAddress } from '../context/AddressContext';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 
-const API_BASE_URL = 'http://192.168.0.127:8080/api'; // Update with your API URL
+const API_BASE_URL = 'https://melany-unicursal-limnologically.ngrok-free.dev/api'; // Update with your API URL
 
 const AddEditAddressScreen = ({ navigation, route }) => {
   const { mode = 'add', address, isFirstTime = false, customerId } = route.params || {};
@@ -28,8 +28,6 @@ const AddEditAddressScreen = ({ navigation, route }) => {
     addressLine1: '',
     addressLine2: '',
     landmark: '',
-    city: '',
-    state: '',
     zipCode: '',
     contactPhone: '',
     addressType: 'HOME',
@@ -62,8 +60,6 @@ const AddEditAddressScreen = ({ navigation, route }) => {
         addressLine1: address.addressLine1 || '',
         addressLine2: address.addressLine2 || '',
         landmark: address.landmark || '',
-        city: address.city || '',
-        state: address.state || '',
         zipCode: address.zipCode || '',
         contactPhone: address.contactPhone || '',
         addressType: address.addressType || 'HOME',
@@ -77,7 +73,7 @@ const AddEditAddressScreen = ({ navigation, route }) => {
   };
 
   const validateForm = () => {
-    const { name, addressLine1, city, state, zipCode } = formData;
+    const { name, addressLine1, zipCode } = formData;
 
     if (!name.trim()) {
       Alert.alert('Error', 'Please enter recipient name');
@@ -85,14 +81,6 @@ const AddEditAddressScreen = ({ navigation, route }) => {
     }
     if (!addressLine1.trim()) {
       Alert.alert('Error', 'Please enter address line 1 (House/Flat number & Street)');
-      return false;
-    }
-    if (!city.trim()) {
-      Alert.alert('Error', 'Please enter city');
-      return false;
-    }
-    if (!state.trim()) {
-      Alert.alert('Error', 'Please enter state');
       return false;
     }
     if (!zipCode.trim() || zipCode.length !== 6) {
@@ -275,29 +263,7 @@ const AddEditAddressScreen = ({ navigation, route }) => {
             />
           </View>
 
-          <View style={styles.row}>
-            <View style={[styles.inputContainer, { flex: 1, marginRight: 8 }]}>
-              <Icon name="location-city" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="City *"
-                placeholderTextColor="#999"
-                value={formData.city}
-                onChangeText={(value) => handleInputChange('city', value)}
-              />
-            </View>
 
-            <View style={[styles.inputContainer, { flex: 1, marginLeft: 8 }]}>
-              <Icon name="map" size={20} color="#666" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="State *"
-                placeholderTextColor="#999"
-                value={formData.state}
-                onChangeText={(value) => handleInputChange('state', value)}
-              />
-            </View>
-          </View>
 
           <View style={styles.inputContainer}>
             <Icon name="pin-drop" size={20} color="#666" style={styles.inputIcon} />

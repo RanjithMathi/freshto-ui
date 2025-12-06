@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
@@ -26,9 +27,25 @@ const CartScreen = ({ navigation }) => {
   
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [otp, setOtp] = useState('');
-  const [showOtpInput, setShowOtpInput] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Reset navigation stack when cart screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      // Check if we're coming from OrderSuccess by checking the navigation state
+      const state = navigation.getState();
+      const routes = state.routes;
+      
+      // If there's more than 1 route (CartMain + something else), reset the stack
+      if (routes.length > 1) {
+        console.log('🔄 Resetting Cart navigation stack');
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'CartMain' }],
+        });
+      }
+    }, [navigation])
+  );
 
   // Log user and addresses when they change
   useEffect(() => {
@@ -86,50 +103,22 @@ const CartScreen = ({ navigation }) => {
     navigation.navigate('AddressSelection', { customerId: user?.userId || user?.id });
   };
 
-  const handleSendOTP = async () => {
+  const handleLogin = async () => {
     // Validate phone number
     if (!phoneNumber || phoneNumber.length !== 10) {
       Alert.alert('Invalid Phone', 'Please enter a valid 10-digit phone number');
       return;
     }
 
-    console.log('📤 Sending OTP to:', phoneNumber);
+    console.log('🔐 Logging in with phone number:', phoneNumber);
     setLoading(true);
     
     try {
-      const response = await authService.sendOtp(phoneNumber);
-      console.log('📨 Send OTP response:', response);
-      
-      if (response.success) {
-        setShowOtpInput(true);
-        Alert.alert('OTP Sent', `Verification code sent to ${phoneNumber}`);
-      } else {
-        Alert.alert('Error', response.message || 'Failed to send OTP');
-      }
-    } catch (error) {
-      console.error('❌ Send OTP error:', error);
-      Alert.alert('Error', 'Failed to send OTP. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifyOTP = async () => {
-    // Validate OTP
-    if (!otp || otp.length !== 6) {
-      Alert.alert('Invalid OTP', 'Please enter a valid 6-digit OTP');
-      return;
-    }
-
-    console.log('🔐 Verifying OTP...');
-    setLoading(true);
-    
-    try {
-      const response = await authService.verifyOtp(phoneNumber, otp);
-      console.log('✅ Verify OTP response:', response);
+      const response = await authService.login(phoneNumber);
+      console.log('✅ Login response:', response);
 
       if (response.success) {
-        console.log('✅ OTP Verified successfully');
+        console.log('✅ Login successful');
         console.log('👤 User data:', response.user);
         console.log('🏠 Has addresses:', response.hasAddresses);
         
@@ -152,8 +141,6 @@ const CartScreen = ({ navigation }) => {
           // Close the auth modal
           setShowAuthModal(false);
           setPhoneNumber('');
-          setOtp('');
-          setShowOtpInput(false);
           
           Alert.alert('Success', 'Login successful!');
           
@@ -180,30 +167,11 @@ const CartScreen = ({ navigation }) => {
           Alert.alert('Error', 'Login failed. Please try again.');
         }
       } else {
-        Alert.alert('Invalid OTP', response.message || 'Please enter the correct OTP');
+        Alert.alert('Login Failed', response.message || 'Please try again');
       }
     } catch (error) {
-      console.error('❌ Error verifying OTP:', error);
-      Alert.alert('Error', 'Failed to verify OTP. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResendOTP = async () => {
-    console.log('🔄 Resending OTP...');
-    setLoading(true);
-    
-    try {
-      const response = await authService.sendOtp(phoneNumber);
-      if (response.success) {
-        Alert.alert('OTP Resent', 'A new verification code has been sent');
-      } else {
-        Alert.alert('Error', response.message || 'Failed to resend OTP');
-      }
-    } catch (error) {
-      console.error('❌ Resend OTP error:', error);
-      Alert.alert('Error', 'Failed to resend OTP. Please try again.');
+      console.error('❌ Login error:', error);
+      Alert.alert('Error', 'Failed to login. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -212,8 +180,6 @@ const CartScreen = ({ navigation }) => {
   const handleCloseAuthModal = () => {
     setShowAuthModal(false);
     setPhoneNumber('');
-    setOtp('');
-    setShowOtpInput(false);
   };
 
   const renderCartItem = ({ item }) => (
@@ -264,7 +230,7 @@ const CartScreen = ({ navigation }) => {
       <Text style={styles.emptySubtitle}>Add items to get started</Text>
       <TouchableOpacity
         style={styles.shopButton}
-        onPress={() => navigation.navigate('Home')}
+        onPress={() => navigation.getParent()?.navigate('Home')}
         activeOpacity={0.8}
       >
         <Text style={styles.shopButtonText}>Start Shopping</Text>
@@ -367,81 +333,37 @@ const CartScreen = ({ navigation }) => {
               <Icon name="close" size={24} color="#333" />
             </TouchableOpacity>
 
-            <Icon name="lock" size={60} color="#0b8a0b" />
-            <Text style={styles.modalTitle}>
-              {showOtpInput ? 'Verify OTP' : 'Login to Continue'}
-            </Text>
+            <Icon name="phone" size={60} color="#0b8a0b" />
+            <Text style={styles.modalTitle}>Login to Continue</Text>
             <Text style={styles.modalSubtitle}>
-              {showOtpInput
-                ? `Enter the 6-digit code sent to ${phoneNumber}`
-                : 'Please enter your phone number to proceed with checkout'}
+              Please enter your phone number to proceed with checkout
             </Text>
 
-            {!showOtpInput ? (
-              <>
-                <View style={styles.inputContainer}>
-                  <Icon name="phone" size={20} color="#666" style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Enter phone number"
-                    keyboardType="phone-pad"
-                    maxLength={10}
-                    value={phoneNumber}
-                    onChangeText={setPhoneNumber}
-                    editable={!loading}
-                  />
-                </View>
+            <View style={styles.inputContainer}>
+              <Icon name="phone" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Enter phone number"
+                keyboardType="phone-pad"
+                maxLength={10}
+                value={phoneNumber}
+                onChangeText={setPhoneNumber}
+                editable={!loading}
+              />
+            </View>
 
-                <TouchableOpacity
-                  style={[styles.authButton, loading && styles.authButtonDisabled]}
-                  onPress={handleSendOTP}
-                  disabled={loading}
-                  activeOpacity={0.8}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.authButtonText}>Send OTP</Text>
-                  )}
-                </TouchableOpacity>
-              </>
-            ) : (
-              <>
-                <View style={styles.inputContainer}>
-                  <Icon name="lock" size={20} color="#666" style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Enter 6-digit OTP"
-                    keyboardType="number-pad"
-                    maxLength={6}
-                    value={otp}
-                    onChangeText={setOtp}
-                    editable={!loading}
-                  />
-                </View>
-
-                <TouchableOpacity
-                  style={[styles.authButton, loading && styles.authButtonDisabled]}
-                  onPress={handleVerifyOTP}
-                  disabled={loading}
-                  activeOpacity={0.8}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.authButtonText}>Verify & Continue</Text>
-                  )}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.resendButton}
-                  onPress={handleResendOTP}
-                  disabled={loading}
-                >
-                  <Text style={styles.resendText}>Didn't receive code? Resend</Text>
-                </TouchableOpacity>
-              </>
-            )}
+            <TouchableOpacity
+              style={[styles.authButton, loading && styles.authButtonDisabled]}
+              onPress={handleLogin}
+              disabled={loading}
+              activeOpacity={0.8}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.authButtonText}>Login</Text>
+              )}
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -449,7 +371,6 @@ const CartScreen = ({ navigation }) => {
   );
 };
 
-// Styles remain the same as your original
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -720,15 +641,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#fff',
-  },
-  resendButton: {
-    marginTop: 20,
-    padding: 8,
-  },
-  resendText: {
-    fontSize: 14,
-    color: '#0b8a0b',
-    fontWeight: '600',
   },
 });
 

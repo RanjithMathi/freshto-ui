@@ -1,19 +1,22 @@
 export const API_CONFIG = {
-  BASE_URL: 'http://192.168.0.127:8080/api',
-  IMAGE_BASE_URL: 'http://192.168.0.127:8080',
+  BASE_URL: 'https://melany-unicursal-limnologically.ngrok-free.dev/api',
+  IMAGE_BASE_URL: 'https://melany-unicursal-limnologically.ngrok-free.dev',
   TIMEOUT: 10000,
+  HEADERS: {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  },
 };
 
 export const API_ENDPOINTS = {
   // Auth endpoints
   AUTH: {
-    SEND_OTP: '/auth/send-otp',
-    VERIFY_OTP: '/auth/verify-otp',
+    LOGIN: '/auth/login',
   },
 
   // Customer endpoints
   CUSTOMERS: '/customers',
-  CUSTOMER_BY_ID: (id) => `/customers/id/${id}`,
+  CUSTOMER_BY_ID: (id) => `/customers/${id}`,
   UPDATE_CUSTOMER_BY_ID: (id) => `/customers/${id}`,
   CUSTOMER_BY_PHONE: (phone) => `/customers/phone/${phone}`,
 

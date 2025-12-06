@@ -6,15 +6,36 @@ import {
   TouchableOpacity,
   ScrollView,
   Animated,
+  BackHandler,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import { useCart } from '../context/CartContext';
 
 const OrderSuccessScreen = ({ navigation, route }) => {
   const { orderId, orderData } = route.params;
+  const { clearCart } = useCart();
 
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  // Handle hardware back button and prevent going back
+  useEffect(() => {
+    // Clear the cart when this screen loads
+    clearCart();
+    
+    const backAction = () => {
+      // Navigate to Home tab when back button is pressed
+      handleContinueShopping();
+      return true; // Prevent default back behavior
+    };
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+
+    return () => {
+      backHandler.remove();
+    };
+  }, [navigation]);
 
   useEffect(() => {
     // Debug: Log the orderData to see its structure
@@ -43,16 +64,18 @@ const OrderSuccessScreen = ({ navigation, route }) => {
   };
 
   const handleContinueShopping = () => {
-    navigation.reset({
-      index: 0,
-      routes: [{ name: 'Home' }],
-    });
+    // Get the parent tab navigator
+    const parent = navigation.getParent();
+    
+    if (parent) {
+      // Switch to Home tab - this will cause Cart stack to unmount
+      parent.navigate('Home');
+    }
   };
 
   // Extract delivery slot parts
   const getDeliveryDate = () => {
     if (orderData?.deliverySlot) {
-      // Split by ' - ' and take the first part as date
       const parts = orderData.deliverySlot.split(' - ');
       return parts[0] || 'Not specified';
     }
@@ -61,10 +84,8 @@ const OrderSuccessScreen = ({ navigation, route }) => {
 
   const getDeliveryTime = () => {
     if (orderData?.deliverySlot) {
-      // After splitting by ' - ', join everything after the first part
       const parts = orderData.deliverySlot.split(' - ');
       if (parts.length > 1) {
-        // Join all parts except the first one (date)
         return parts.slice(1).join(' - ');
       }
     }
@@ -74,7 +95,6 @@ const OrderSuccessScreen = ({ navigation, route }) => {
   const getEstimatedDeliveryTime = () => {
     const time = getDeliveryTime();
     if (time !== 'Not specified') {
-      // Return the end time if it's a range
       const timeParts = time.split('-');
       return timeParts.length > 1 ? timeParts[1].trim() : time;
     }

@@ -25,8 +25,7 @@ export const CartProvider = ({ children }) => {
       const existingItem = prevItems.find(item => item.id === product.id);
       
       if (existingItem) {
-        // Update quantity if item already exists
-        showToast(`${product.title} quantity updated!`, 'success');
+        // Update quantity if item already exists (no toast notification)
         return prevItems.map(item =>
           item.id === product.id
             ? { ...item, quantity: item.quantity + quantity }
@@ -34,9 +33,8 @@ export const CartProvider = ({ children }) => {
         );
       }
       
-      // Add new item - ensure price is numeric
+      // Add new item - ensure price is numeric (no toast notification)
       const numericPrice = parsePrice(product.price);
-      showToast(`${product.title} added to cart!`, 'success');
       return [...prevItems, { ...product, price: numericPrice, quantity }];
     });
   };
@@ -64,7 +62,7 @@ export const CartProvider = ({ children }) => {
   // Clear entire cart
   const clearCart = () => {
     setCartItems([]);
-    showToast('Cart cleared', 'info');
+    // showToast('Cart cleared', 'info');
   };
 
   // Get total number of unique items (products) in cart

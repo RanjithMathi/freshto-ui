@@ -192,6 +192,10 @@ const AddressSelectionScreen = ({ navigation, route }) => {
 
         {/* Address Details */}
         <View style={styles.addressContent}>
+          {address.name && (
+            <Text style={styles.nameText}>{address.name}</Text>
+          )}
+          
           <Text style={styles.addressText}>{address.addressLine1}</Text>
           
           {address.addressLine2 && (
@@ -203,10 +207,15 @@ const AddressSelectionScreen = ({ navigation, route }) => {
           )}
           
           <Text style={styles.addressText}>
-            {address.city}, {address.state} - {address.zipCode}
+            {address.zipCode}
           </Text>
 
-          {address.contactPhone && (
+          <View style={styles.phoneContainer}>
+            <Icon name="phone" size={14} color="#666" />
+            <Text style={styles.phoneText}>{user?.phoneNumber || user?.phone}</Text>
+          </View>
+
+          {address.contactPhone && address.contactPhone !== (user?.phoneNumber || user?.phone) && (
             <View style={styles.phoneContainer}>
               <Icon name="phone" size={14} color="#666" />
               <Text style={styles.phoneText}>{address.contactPhone}</Text>
@@ -252,6 +261,16 @@ const AddressSelectionScreen = ({ navigation, route }) => {
       </View>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        {/* Customer Info Section */}
+        <View style={styles.customerInfoSection}>
+          <Icon name="person" size={24} color="#0b8a0b" />
+          <View style={styles.customerInfo}>
+            <Text style={styles.customerInfoLabel}>Customer</Text>
+            <Text style={styles.customerInfoValue}>{user?.name || 'Customer'}</Text>
+            <Text style={styles.customerPhoneValue}>{user?.phoneNumber || user?.phone}</Text>
+          </View>
+        </View>
+
         {/* Empty State */}
         {addresses.length === 0 ? (
           <View style={styles.emptyState}>
@@ -339,6 +358,38 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
     paddingBottom: 100,
+  },
+  customerInfoSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  customerInfo: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  customerInfoLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 4,
+  },
+  customerInfoValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  customerPhoneValue: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 2,
   },
   emptyState: {
     alignItems: 'center',
@@ -434,6 +485,13 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 4,
     lineHeight: 20,
+  },
+  nameText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 6,
+    lineHeight: 22,
   },
   landmarkText: {
     fontSize: 13,

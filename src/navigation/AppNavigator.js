@@ -1,7 +1,7 @@
 // ========================================
 // src/navigation/AppNavigator.js - COMPLETE FIX
 // ========================================
-import React from 'react';
+import React, { useEffect } from 'react';
 import {NavigationContainer} from '@react-navigation/native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
@@ -32,7 +32,7 @@ const Tab = createBottomTabNavigator();
 const HomeStack = createNativeStackNavigator();
 const CategoriesStack = createNativeStackNavigator();
 const CartStack = createNativeStackNavigator();
-const AccountStack = createNativeStackNavigator(); // ✅ NEW: Account Stack
+const AccountStack = createNativeStackNavigator();
 
 // Home Stack Navigator
 const HomeStackNavigator = () => {
@@ -97,10 +97,28 @@ const CategoriesStackNavigator = () => {
 
 // Cart Stack Navigator - includes checkout flow
 const CartStackNavigator = () => {
+  const navigationRef = React.useRef(null);
+
   return (
     <CartStack.Navigator
       screenOptions={{
         headerShown: false,
+      }}
+      screenListeners={{
+        state: (e) => {
+          // Listen to navigation state changes
+          const state = e.data.state;
+          
+          // Check if we're on OrderSuccess screen
+          if (state && state.routes && state.routes.length > 0) {
+            const currentRoute = state.routes[state.index];
+            
+            // If OrderSuccess is the current screen and user hasn't left the Cart tab
+            if (currentRoute.name === 'OrderSuccess') {
+              console.log('📍 Detected OrderSuccess screen in Cart stack');
+            }
+          }
+        },
       }}
     >
       <CartStack.Screen name="CartMain" component={CartScreen} />
@@ -138,6 +156,8 @@ const CartStackNavigator = () => {
         options={{
           animation: 'slide_from_bottom',
           gestureEnabled: false,
+          headerLeft: () => null,
+          headerBackVisible: false,
         }}
       />
       <CartStack.Screen
@@ -151,7 +171,7 @@ const CartStackNavigator = () => {
   );
 };
 
-// ✅ NEW: Account Stack Navigator - includes profile management
+// Account Stack Navigator - includes profile management
 const AccountStackNavigator = () => {
   return (
     <AccountStack.Navigator
@@ -202,7 +222,8 @@ const AccountStackNavigator = () => {
 
 // Tab Navigator Component
 const TabNavigator = () => {
-  const { getTotalItems } = useCart();
+  const { getTotalItems, clearCart, hideToast } = useCart();
+  const cartNavigationRef = React.useRef(null);
 
   return (
     <Tab.Navigator
@@ -239,7 +260,7 @@ const TabNavigator = () => {
               'ProductDetailScreen',
               'CategoryProducts',
               'AddressSelection',
-              'AddressManagement', // ✅ Added
+              'AddressManagement',
               'AddEditAddress',
               'TimeSlotSelection',
               'OrderSummary',
@@ -264,7 +285,49 @@ const TabNavigator = () => {
           };
         })(),
         headerShown: false,
-      })}>
+      })}
+      screenListeners={({navigation, route}) => ({
+        tabPress: (e) => {
+          // Intercept Cart tab press
+          if (route.name === 'Cart') {
+            const state = navigation.getState();
+            const cartRoute = state.routes.find(r => r.name === 'Cart');
+            
+            // Check if Cart stack has OrderSuccess screen
+            if (cartRoute?.state) {
+              const cartState = cartRoute.state;
+              const currentCartScreen = cartState.routes[cartState.index];
+              
+              if (currentCartScreen.name === 'OrderSuccess') {
+                console.log('🔄 Intercepting Cart tab press - resetting from OrderSuccess');
+                e.preventDefault();
+                
+                // Clear cart and hide toast notification
+                clearCart();
+                hideToast();
+                
+                // Reset the Cart navigator to CartMain
+                navigation.reset({
+                  index: state.index,
+                  routes: state.routes.map(r => {
+                    if (r.name === 'Cart') {
+                      return {
+                        ...r,
+                        state: {
+                          routes: [{ name: 'CartMain' }],
+                          index: 0,
+                        },
+                      };
+                    }
+                    return r;
+                  }),
+                });
+              }
+            }
+          }
+        },
+      })}
+    >
       <Tab.Screen 
         name="Home" 
         component={HomeStackNavigator}
@@ -304,7 +367,7 @@ const TabNavigator = () => {
       />
       <Tab.Screen 
         name="Account" 
-        component={AccountStackNavigator} // ✅ Changed from single screen to stack
+        component={AccountStackNavigator}
         options={{title: 'Account'}}
       />
     </Tab.Navigator>
